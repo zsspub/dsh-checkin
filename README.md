@@ -9,7 +9,7 @@ Daily check-in topics for DeepSeek Harness, with model tools and a right-side ca
 Requires DSH `0.1.5-alpha.1` and Node.js `^22.19.0 || >=24.0.0`. Install a pinned commit, then restart the profile and refresh its browser:
 
 ```sh
-dsh plugin --profile web add github:zsspub/dsh-checkin#<commit-sha>
+dsh plugin --profile web add github:zsspub/dsh-checkin#bb9e46c3b2b42224d7d45e12f897e3450695ccc2
 ```
 
 Built artifacts are committed; installation needs no lifecycle build. A tarball from `pnpm pack` is also supported.

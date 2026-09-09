@@ -9,7 +9,7 @@
 需要 DSH `0.1.5-alpha.1` 和 Node.js `^22.19.0 || >=24.0.0`。安装固定提交以便复现版本：
 
 ```sh
-dsh plugin --profile web add github:zsspub/dsh-checkin#<commit-sha>
+dsh plugin --profile web add github:zsspub/dsh-checkin#bb9e46c3b2b42224d7d45e12f897e3450695ccc2
 ```
 
 安装后重启该 DSH profile，并刷新页面。Git 仓库包含编译产物，安装时不需要编译插件。也可以安装 `pnpm pack` 生成的 tarball。

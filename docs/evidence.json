@@ -1,0 +1,140 @@
+{
+  "codeCommit": "bb9e46c3b2b42224d7d45e12f897e3450695ccc2",
+  "dshVersion": "0.1.5-alpha.1",
+  "calls": [
+    {
+      "sequence": 16,
+      "turn": 1,
+      "step": 1,
+      "tool": "checkin_topic_list"
+    },
+    {
+      "sequence": 21,
+      "turn": 1,
+      "step": 2,
+      "tool": "checkin_topic_create"
+    },
+    {
+      "sequence": 23,
+      "turn": 1,
+      "step": 2,
+      "tool": "checkin_topic_create"
+    },
+    {
+      "sequence": 28,
+      "turn": 1,
+      "step": 3,
+      "tool": "checkin_set"
+    },
+    {
+      "sequence": 30,
+      "turn": 1,
+      "step": 3,
+      "tool": "checkin_set"
+    },
+    {
+      "sequence": 35,
+      "turn": 1,
+      "step": 4,
+      "tool": "checkin_query"
+    },
+    {
+      "sequence": 48,
+      "turn": 2,
+      "step": 1,
+      "tool": "checkin_topic_list"
+    },
+    {
+      "sequence": 53,
+      "turn": 2,
+      "step": 2,
+      "tool": "checkin_query"
+    },
+    {
+      "sequence": 58,
+      "turn": 2,
+      "step": 3,
+      "tool": "checkin_set"
+    },
+    {
+      "sequence": 60,
+      "turn": 2,
+      "step": 3,
+      "tool": "checkin_topic_update"
+    },
+    {
+      "sequence": 65,
+      "turn": 2,
+      "step": 4,
+      "tool": "checkin_topic_create"
+    },
+    {
+      "sequence": 70,
+      "turn": 2,
+      "step": 5,
+      "tool": "checkin_topic_delete"
+    },
+    {
+      "sequence": 75,
+      "turn": 2,
+      "step": 6,
+      "tool": "checkin_query"
+    }
+  ],
+  "toolResultCount": 13,
+  "toolErrorCount": 0,
+  "beforeRestart": {
+    "topics": [
+      {
+        "name": "锻炼"
+      },
+      {
+        "name": "阅读"
+      }
+    ],
+    "completions": [
+      {
+        "name": "锻炼",
+        "date": "2026-09-09"
+      },
+      {
+        "name": "锻炼",
+        "date": "2026-09-10"
+      },
+      {
+        "name": "阅读",
+        "date": "2026-09-10"
+      }
+    ]
+  },
+  "afterRestart": {
+    "topics": [
+      {
+        "name": "锻炼"
+      },
+      {
+        "name": "阅读"
+      }
+    ],
+    "completions": [
+      {
+        "name": "锻炼",
+        "date": "2026-09-09"
+      },
+      {
+        "name": "锻炼",
+        "date": "2026-09-10"
+      },
+      {
+        "name": "阅读",
+        "date": "2026-09-10"
+      }
+    ]
+  },
+  "sha256": {
+    "lib/index.js": "aaab617c2d3d5a58d7be30d3e0761deea68a60eab6b225baf3487f2e621fa687",
+    "lib/tools.js": "3aeed8a99d986135e03ef650e10d2b16c5ac7a1bd21630efa486b7a0834e944b",
+    "lib/client.js": "c14ec3266434b433a8ebe366d9a52b02ff20eacbb73fe0d3feb996a12c6b29d0",
+    "docs/media/checkin-e2e.gif": "51b71fe11bfa7259f346e0375d62bcbe5db529c438ae9ec7f26250d4f42441e7"
+  }
+}
