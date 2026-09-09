@@ -7,7 +7,7 @@ description: A compact habit calendar within the DSH conversation shell.
 
 ## Overview
 
-The interface inherits the host font and semantic tokens from DeepSeek Harness `0.1.5-alpha.1` (`ui-theme`, `ui-sidebar`, and `ui-layout`). The personal-todo plugin supplies the sidebar action geometry. Use restrained contrast, compact controls, and Lucide outline icons; the conversation remains reachable beside the non-modal drawer.
+The interface inherits the host font and semantic tokens from DeepSeek Harness `0.1.5-alpha.1` (`ui-theme`, `ui-sidebar`, and `ui-layout`). The settings trigger supplies the sidebar action geometry. Use restrained contrast, compact controls, and Lucide outline icons; the conversation remains reachable beside the non-modal drawer.
 
 ## Colors
 
@@ -29,7 +29,7 @@ The drawer has a thin semantic border without a shadow or backdrop. Internal sec
 
 ## Shapes
 
-The desktop drawer has a 20px radius; the full-screen drawer has square corners. Controls use 9px corners, inputs 8px, and calendar dates 10px. Completion toggles are 28px circles. The sidebar action is 28px high with a 14px radius and a 16px icon.
+The desktop drawer has a 20px radius; the full-screen drawer has square corners. Controls use 9px corners, inputs 8px, and calendar dates 10px. Completion toggles are 28px circles. The sidebar action matches Settings at 42px high, 14px text, 12px radius and a 16px Lucide icon; the collapsed rail uses a 36px circle. The native topic select uses a semantic border and a Lucide chevron while retaining native keyboard behavior. Empty-state illustration spacing applies only to the illustration, never button icons.
 
 ## Components
 
