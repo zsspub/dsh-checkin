@@ -1,0 +1,128 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`replays topic CRUD and completion tool output against the real Host service 1`] = `
+[
+  {
+    "text": [
+      {
+        "text": "{"id":"<topic-id>","name":"阅读","createdAt":"<timestamp>","updatedAt":"<timestamp>"}",
+        "type": "text",
+      },
+    ],
+    "value": {
+      "createdAt": "<timestamp>",
+      "id": "<topic-id>",
+      "name": "阅读",
+      "updatedAt": "<timestamp>",
+    },
+  },
+  {
+    "text": [
+      {
+        "text": "{"topic":{"id":"<topic-id>","name":"阅读","createdAt":"<timestamp>","updatedAt":"<timestamp>"},"date":"2024-02-29","completed":true}",
+        "type": "text",
+      },
+    ],
+    "value": {
+      "completed": true,
+      "date": "2024-02-29",
+      "topic": {
+        "createdAt": "<timestamp>",
+        "id": "<topic-id>",
+        "name": "阅读",
+        "updatedAt": "<timestamp>",
+      },
+    },
+  },
+  {
+    "text": [
+      {
+        "text": "{"today":"<today>","timeZone":"Asia/Shanghai","topics":[{"id":"<topic-id>","name":"阅读","createdAt":"<timestamp>","updatedAt":"<timestamp>"}],"from":"2024-02-28","to":"2024-03-01","completions":[{"topicId":"<topic-id>","date":"2024-02-29"}]}",
+        "type": "text",
+      },
+    ],
+    "value": {
+      "completions": [
+        {
+          "date": "2024-02-29",
+          "topicId": "<topic-id>",
+        },
+      ],
+      "from": "2024-02-28",
+      "timeZone": "Asia/Shanghai",
+      "to": "2024-03-01",
+      "today": "<today>",
+      "topics": [
+        {
+          "createdAt": "<timestamp>",
+          "id": "<topic-id>",
+          "name": "阅读",
+          "updatedAt": "<timestamp>",
+        },
+      ],
+    },
+  },
+  {
+    "text": [
+      {
+        "text": "{"id":"<topic-id>","name":"读书","createdAt":"<timestamp>","updatedAt":"<timestamp>"}",
+        "type": "text",
+      },
+    ],
+    "value": {
+      "createdAt": "<timestamp>",
+      "id": "<topic-id>",
+      "name": "读书",
+      "updatedAt": "<timestamp>",
+    },
+  },
+  {
+    "text": [
+      {
+        "text": "{"topic":{"id":"<topic-id>","name":"读书","createdAt":"<timestamp>","updatedAt":"<timestamp>"},"date":"2024-02-29","completed":false}",
+        "type": "text",
+      },
+    ],
+    "value": {
+      "completed": false,
+      "date": "2024-02-29",
+      "topic": {
+        "createdAt": "<timestamp>",
+        "id": "<topic-id>",
+        "name": "读书",
+        "updatedAt": "<timestamp>",
+      },
+    },
+  },
+  {
+    "text": [
+      {
+        "text": "{"topic":{"id":"<topic-id>","name":"读书","createdAt":"<timestamp>","updatedAt":"<timestamp>"},"deletedRecords":0}",
+        "type": "text",
+      },
+    ],
+    "value": {
+      "deletedRecords": 0,
+      "topic": {
+        "createdAt": "<timestamp>",
+        "id": "<topic-id>",
+        "name": "读书",
+        "updatedAt": "<timestamp>",
+      },
+    },
+  },
+  {
+    "text": [
+      {
+        "text": "{"today":"<today>","timeZone":"Asia/Shanghai","topics":[]}",
+        "type": "text",
+      },
+    ],
+    "value": {
+      "timeZone": "Asia/Shanghai",
+      "today": "<today>",
+      "topics": [],
+    },
+  },
+]
+`;

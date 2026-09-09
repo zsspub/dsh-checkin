@@ -1,0 +1,56 @@
+/** Locale-owned check-in copy. */
+export declare const NS = "checkin";
+/** Simplified Chinese dictionary. */
+export declare const zh: {
+    title: string;
+    open: string;
+    close: string;
+    subtitle: string;
+    add: string;
+    rename: string;
+    remove: string;
+    name: string;
+    placeholder: string;
+    save: string;
+    cancel: string;
+    all: string;
+    filter: string;
+    prev: string;
+    next: string;
+    today: string;
+    loading: string;
+    retry: string;
+    error: string;
+    empty: string;
+    emptyHint: string;
+    completed: string;
+    incomplete: string;
+    future: string;
+    tz: string;
+    totalHint: string;
+    calendar: string;
+    daySummary: string;
+    dateTitle: string;
+    count: string;
+    set: string;
+    unset: string;
+    deleteTitle: string;
+    deleteHint: string;
+    confirmDelete: string;
+    duplicate: string;
+    invalidName: string;
+    notFound: string;
+    invalidDate: string;
+    sun: string;
+    mon: string;
+    tue: string;
+    wed: string;
+    thu: string;
+    fri: string;
+    sat: string;
+    busy: string;
+};
+/** Dictionary key union. */
+export type CheckinKey = keyof typeof zh;
+/** English dictionary. */
+export declare const en: Record<CheckinKey, string>;

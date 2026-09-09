@@ -1,0 +1,1 @@
+{"version":3,"file":"typert.remote-client.d.ts","names":["create","delete","list","month","query","set","update"],"sources":["../src/index.ts"],"sourcesContent":[null],"mappings":";;;;;;;;;IA6BQA,M;IAMAC,M;IATAC,I;IAkBAC,K;IAHAC,K;IAHAC,G;IANAC,M;;;IAHAN,gB;IAMAC,gB;IATAC,c;IAkBAC,e;IAHAC,e;IAHAC,a;IANAC,gB","ignoreList":[]}
