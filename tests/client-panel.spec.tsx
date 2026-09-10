@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { CheckinPanel } from '../src/client/CheckinPanel.tsx'
+import { CheckinPanel, CheckinTrigger } from '../src/client/CheckinPanel.tsx'
 import { CheckinController, type CheckinApi } from '../src/client/controller.ts'
 import { zh, type CheckinKey } from '../src/client/locales.ts'
 import type { MonthResult, TopicId } from '../src/types.ts'
@@ -76,5 +76,31 @@ it('restores focus to month navigation after loading', async () => {
     fireEvent.click(screen.getByRole('button', { name: '上个月' }))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: '上个月' })))
     expect(screen.getByRole('heading', { name: '2026 / 08' })).toBeTruthy()
+  } finally { dispose() }
+})
+
+it('closes on outside clicks without stealing focus, and keeps entry toggles stable', async () => {
+  const { controller, dispose } = mount()
+  try {
+    render(<><CheckinTrigger {...{ controller, t, wide: true } as ComponentProps<typeof CheckinTrigger>} /><button>外部操作</button></>)
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('heading', { name: '打卡' }))
+    expect(screen.queryByRole('dialog')).not.toBeNull()
+    const outside = screen.getByRole('button', { name: '外部操作' })
+    outside.focus()
+    fireEvent.click(outside)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(outside)
+    const trigger = document.querySelector<HTMLButtonElement>('.ci-trigger')!
+    fireEvent.click(trigger.querySelector('svg')!)
+    await screen.findByRole('grid')
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(trigger.querySelector('svg')!)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(trigger)
+    await screen.findByRole('grid')
+    fireEvent.click(document.body)
+    expect(screen.queryByRole('dialog')).toBeNull()
   } finally { dispose() }
 })

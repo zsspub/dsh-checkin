@@ -1,5 +1,6 @@
 node_modules/
 .verification/
+.playwright-mcp/
 .env*
 *.sqlite*
 *.db*

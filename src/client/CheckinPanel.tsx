@@ -64,11 +64,25 @@ export function CheckinPanel({ t, controller }: PanelProps) {
     if (!state.open) return
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     closeRef.current?.focus()
+    let restoreFocus = true
+    const outside = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node) || panelRef.current?.contains(target)) return
+      // The shared entry owns its toggle; closing here would reopen it on the same click.
+      if (target instanceof Element && target.closest('.ci-trigger[aria-controls="dsh-checkin-panel"]')) return
+      restoreFocus = false
+      controller.close()
+    }
     const key = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') { controller.close(); event.preventDefault() }
     }
     document.addEventListener('keydown', key)
-    return () => { document.removeEventListener('keydown', key); if (returnFocus.current?.isConnected) returnFocus.current.focus() }
+    document.addEventListener('click', outside, true)
+    return () => {
+      document.removeEventListener('keydown', key)
+      document.removeEventListener('click', outside, true)
+      if (restoreFocus && returnFocus.current?.isConnected) returnFocus.current.focus()
+    }
   }, [controller, state.open])
   useEffect(() => { if (formOpen) nameRef.current?.focus() }, [formOpen, formId])
   useEffect(() => {
