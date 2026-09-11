@@ -2,14 +2,14 @@
 
 English | [中文](README.zh.md)
 
-Daily check-in topics for DeepSeek Harness, with model tools and a right-side calendar drawer. One Host-wide SQLite database, using Node's built-in `node:sqlite`, serves both interfaces across sessions and workspaces.
+Daily check-in topics for DeepSeek Harness, with model tools and a Host-native right-side tab. One Host-wide SQLite database, using Node's built-in `node:sqlite`, serves both interfaces across sessions and workspaces.
 
 ## Install
 
-Requires DSH `0.1.5-alpha.1` and Node.js `^22.19.0 || >=24.0.0`. Install a pinned commit, then restart the profile and refresh its browser:
+Requires DSH `0.1.5-rc.1` and Node.js `^22.19.0 || >=24.0.0`. Install from the repository, then restart the profile and refresh its browser; pin a verified commit for reproducible deployments:
 
 ```sh
-dsh plugin --profile web add github:zsspub/dsh-checkin#bb9e46c3b2b42224d7d45e12f897e3450695ccc2
+dsh plugin --profile web add github:zsspub/dsh-checkin
 ```
 
 Built artifacts are committed; installation needs no lifecycle build. A tarball from `pnpm pack` is also supported.
@@ -18,9 +18,9 @@ Built artifacts are committed; installation needs no lifecycle build. A tarball 
 
 Ask DSH to create a Reading topic, complete it today, backfill yesterday, query a month, rename the topic, undo a day, or delete a topic and its history. Tools discover exact topic IDs before updating them. Topic deletion is permanent; undoing a check-in removes only that day's completion.
 
-Open **Check-ins** at the bottom of the sidebar. The month overview shows completed/current topics per day. Select a topic to see its calendar, or select a day to edit completions in the list below. Topic rows offer rename and confirmed deletion. Arrow keys move calendar focus; Home/End select the month's first/last day; Escape closes and restores focus.
+Open **Check-ins** at the bottom of the sidebar to open or focus the Host's right-side check-in tab. The month overview shows completed/current topics per day. Select a topic to see its calendar, or select a day to edit completions in the list below. Topic rows offer rename and confirmed deletion. Arrow keys move calendar focus; Home/End select the month's first/last day. The Host provides tab closing, splitting, floating and fullscreen controls.
 
-All dates use **Asia/Shanghai**. Every past date is editable, including dates before topic creation. Future dates are read-only. Historical totals use the current topic catalog, so adding or deleting topics changes their denominator. The visible drawer refreshes every three seconds and immediately after UI writes, reopening, or returning to the page. Failed writes retain form input.
+All dates use **Asia/Shanghai**. Every past date is editable, including dates before topic creation. Future dates are read-only. Historical totals use the current topic catalog, so adding or deleting topics changes their denominator. The visible tab refreshes every three seconds and immediately after UI writes, becoming visible again, or returning to the page. Failed writes retain form input.
 
 ## Configuration and storage
 

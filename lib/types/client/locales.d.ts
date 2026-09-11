@@ -4,7 +4,6 @@ export declare const NS = "checkin";
 export declare const zh: {
     title: string;
     open: string;
-    close: string;
     subtitle: string;
     add: string;
     rename: string;

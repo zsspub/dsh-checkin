@@ -1,4 +1,4 @@
-/** Browser registration: shared Remote controller, sidebar entry and shell overlay. */
+/** Browser registration: shared Remote controller, sidebar entry and host right-tab body. */
 import type { Context } from '@deepseek-ai/cordis';
 import { type CheckinKey } from './locales.ts';
 declare module '@deepseek-ai/dsh-client-ui-slots' {

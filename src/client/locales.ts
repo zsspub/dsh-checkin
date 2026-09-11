@@ -2,7 +2,7 @@
 export const NS = 'checkin'
 /** Simplified Chinese dictionary. */
 export const zh = {
-  title: '打卡', open: '打开打卡', close: '关闭打卡', subtitle: '每天一小步，记录你的坚持。',
+  title: '打卡', open: '打开打卡', subtitle: '每天一小步，记录你的坚持。',
   add: '新建主题', rename: '重命名', remove: '删除主题', name: '主题名称', placeholder: '例如：阅读、运动、早睡',
   save: '保存', cancel: '取消', all: '全部主题', filter: '查看主题', prev: '上个月', next: '下个月', today: '今天',
   loading: '正在读取打卡…', retry: '重试', error: '暂时无法完成操作，请重试。', empty: '从一个小习惯开始', emptyHint: '新建一个主题，在日历里记录每天是否完成。',
@@ -17,7 +17,7 @@ export const zh = {
 export type CheckinKey = keyof typeof zh
 /** English dictionary. */
 export const en: Record<CheckinKey, string> = {
-  title: 'Check-ins', open: 'Open check-ins', close: 'Close check-ins', subtitle: 'Small steps, one day at a time.',
+  title: 'Check-ins', open: 'Open check-ins', subtitle: 'Small steps, one day at a time.',
   add: 'New topic', rename: 'Rename', remove: 'Delete topic', name: 'Topic name', placeholder: 'Reading, exercise, an early night…',
   save: 'Save', cancel: 'Cancel', all: 'All topics', filter: 'Filter topics', prev: 'Previous month', next: 'Next month', today: 'Today',
   loading: 'Loading check-ins…', retry: 'Retry', error: 'Could not complete this action. Please retry.', empty: 'Start with a small habit', emptyHint: 'Create a topic and mark each completed day on the calendar.',

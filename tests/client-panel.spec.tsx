@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CheckinPanel, CheckinTrigger } from '../src/client/CheckinPanel.tsx'
@@ -7,6 +7,8 @@ import { zh, type CheckinKey } from '../src/client/locales.ts'
 import type { MonthResult, TopicId } from '../src/types.ts'
 afterEach(cleanup)
 const t = (key: CheckinKey, params?: Record<string, string | number>) => Object.entries(params ?? {}).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), zh[key])
+const visibleTabSignal = new AbortController().signal
+const visibleTab = () => ({ tab: { visible: true, signal: visibleTabSignal } })
 function mount() {
   let data: MonthResult = { today: '2026-09-10', timeZone: 'Asia/Shanghai', from: '2026-09-01', to: '2026-09-30', month: '2026-09', refreshIntervalMs: 3000, topics: [{ id: 'read' as TopicId, name: '阅读', createdAt: '2026-09-10', updatedAt: '2026-09-10' }, { id: 'run' as TopicId, name: '运动', createdAt: '2026-09-10', updatedAt: '2026-09-10' }], completions: [] }
   const api: CheckinApi = {
@@ -16,13 +18,11 @@ function mount() {
     set: vi.fn(async request => { data = { ...data, completions: request.completed ? [...data.completions, { topicId: request.topicId, date: request.date! }] : data.completions.filter(row => row.topicId !== request.topicId || row.date !== request.date) }; return {} }),
   }
   const controller = new CheckinController(api)
-  const opener = document.createElement('button'); opener.textContent = 'opener'; document.body.append(opener); opener.focus()
-  render(<CheckinPanel {...{ controller, t } as ComponentProps<typeof CheckinPanel>} />)
-  act(() => controller.open())
-  return { controller, api, dispose: () => { controller.dispose(); opener.remove() }, opener }
+  render(<CheckinPanel {...{ createController: () => controller, t, useTabInfo: visibleTab } as ComponentProps<typeof CheckinPanel>} />)
+  return { controller, api, dispose: () => { controller.dispose() } }
 }
-it('edits past days, disables future writes, filters topics and restores focus on Escape', async () => {
-  const { api, dispose, opener } = mount()
+it('edits past days, disables future writes and filters topics', async () => {
+  const { api, dispose } = mount()
   try {
     await screen.findByRole('grid')
     await waitFor(() => expect(screen.getByRole('button', { name: /^2026-09-10，/ }).tabIndex).toBe(0))
@@ -34,8 +34,6 @@ it('edits past days, disables future writes, filters topics and restores focus o
     expect(screen.queryByRole('checkbox', { name: '完成 运动' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /^2026-09-11，/ }))
     expect((screen.getByRole('checkbox', { name: '完成 阅读' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog')).toBeNull(); expect(document.activeElement).toBe(opener)
   } finally { dispose() }
 })
 it('keeps failed form input and requires a separate delete confirmation', async () => {
@@ -79,28 +77,80 @@ it('restores focus to month navigation after loading', async () => {
   } finally { dispose() }
 })
 
-it('closes on outside clicks without stealing focus, and keeps entry toggles stable', async () => {
-  const { controller, dispose } = mount()
-  try {
-    render(<><CheckinTrigger {...{ controller, t, wide: true } as ComponentProps<typeof CheckinTrigger>} /><button>外部操作</button></>)
-    await screen.findByRole('grid')
-    fireEvent.click(screen.getByRole('heading', { name: '打卡' }))
-    expect(screen.queryByRole('dialog')).not.toBeNull()
-    const outside = screen.getByRole('button', { name: '外部操作' })
-    outside.focus()
-    fireEvent.click(outside)
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(document.activeElement).toBe(outside)
-    const trigger = document.querySelector<HTMLButtonElement>('.ci-trigger')!
-    fireEvent.click(trigger.querySelector('svg')!)
-    await screen.findByRole('grid')
-    expect(trigger.getAttribute('aria-expanded')).toBe('true')
-    fireEvent.click(trigger.querySelector('svg')!)
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(trigger)
-    await screen.findByRole('grid')
-    fireEvent.click(document.body)
-    expect(screen.queryByRole('dialog')).toBeNull()
-  } finally { dispose() }
+it('loads only while its host tab is visible', async () => {
+  const api: CheckinApi = {
+    month: vi.fn(async () => ({ today: '2026-09-10', timeZone: 'Asia/Shanghai', from: '2026-09-01', to: '2026-09-30', month: '2026-09', refreshIntervalMs: 3000, topics: [], completions: [] })),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(),
+  }
+  const controller = new CheckinController(api)
+  let visible = false
+  const signal = new AbortController().signal
+  const useTabInfo = () => ({ tab: { visible, signal } })
+  const props = { createController: () => controller, t, useTabInfo } as ComponentProps<typeof CheckinPanel>
+  const view = render(<CheckinPanel {...props} />)
+  expect(api.month).not.toHaveBeenCalled()
+  visible = true
+  view.rerender(<CheckinPanel {...props} />)
+  await waitFor(() => expect(api.month).toHaveBeenCalledOnce())
+  controller.dispose()
+})
+
+it('cancels an in-flight read when the host tab is hidden', async () => {
+  let requestSignal: AbortSignal | undefined
+  const api: CheckinApi = {
+    month: vi.fn((_request, signal) => { requestSignal = signal; return new Promise<MonthResult>(() => {}) }),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(),
+  }
+  const controller = new CheckinController(api)
+  let visible = true
+  const signal = new AbortController().signal
+  const useTabInfo = () => ({ tab: { visible, signal } })
+  const props = { createController: () => controller, t, useTabInfo } as ComponentProps<typeof CheckinPanel>
+  const view = render(<CheckinPanel {...props} />)
+  await waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal))
+  visible = false
+  view.rerender(<CheckinPanel {...props} />)
+  expect(requestSignal?.aborted).toBe(true)
+})
+
+it('cancels an in-flight read when the host ends the tab lifetime', async () => {
+  let requestSignal: AbortSignal | undefined
+  const api: CheckinApi = {
+    month: vi.fn((_request, signal) => { requestSignal = signal; return new Promise<MonthResult>(() => {}) }),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(),
+  }
+  const controller = new CheckinController(api)
+  const lifetime = new AbortController()
+  render(<CheckinPanel {...{ createController: () => controller, t, useTabInfo: () => ({ tab: { visible: true, signal: lifetime.signal } }) } as ComponentProps<typeof CheckinPanel>} />)
+  await waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal))
+  lifetime.abort()
+  expect(requestSignal?.aborted).toBe(true)
+})
+
+it('keeps split-pane tab state and requests independent', async () => {
+  const createController = vi.fn(() => new CheckinController({
+    month: vi.fn(async request => {
+      const value = request.month ?? '2026-09'
+      return { today: '2026-09-10', timeZone: 'Asia/Shanghai', from: `${value}-01`, to: `${value}-${value === '2026-09' ? '30' : '31'}`, month: value, refreshIntervalMs: 3000, topics: [{ id: 'read' as TopicId, name: '阅读', createdAt: '2026-09-10', updatedAt: '2026-09-10' }], completions: [] }
+    }),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(),
+  }))
+  const first = new AbortController().signal
+  const second = new AbortController().signal
+  render(<>
+    <CheckinPanel {...{ createController, t, useTabInfo: () => ({ tab: { visible: true, signal: first } }) } as ComponentProps<typeof CheckinPanel>} />
+    <CheckinPanel {...{ createController, t, useTabInfo: () => ({ tab: { visible: true, signal: second } }) } as ComponentProps<typeof CheckinPanel>} />
+  </>)
+  await waitFor(() => expect(screen.getAllByRole('heading', { name: '2026 / 09' })).toHaveLength(2))
+  fireEvent.click(screen.getAllByRole('button', { name: '上个月' })[0]!)
+  await screen.findByRole('heading', { name: '2026 / 08' })
+  expect(screen.getAllByRole('heading', { name: '2026 / 09' })).toHaveLength(1)
+  expect(createController).toHaveBeenCalledTimes(2)
+})
+
+it('opens the host right tab from the sidebar entry', () => {
+  const openPanel = vi.fn()
+  render(<CheckinTrigger {...{ openPanel, t, wide: true } as ComponentProps<typeof CheckinTrigger>} />)
+  fireEvent.click(screen.getByRole('button', { name: '打开打卡' }))
+  expect(openPanel).toHaveBeenCalledOnce()
 })

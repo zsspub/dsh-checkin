@@ -1,18 +1,20 @@
-/** Non-modal calendar drawer rendered in the host shell overlay. */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+/** Calendar and topic management rendered in the host's right-side tab. */
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { CalendarCheck2, Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CalendarCheck2, Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Topic, TopicId } from '../types.ts'
 import { CheckinController } from './controller.ts'
 import type { CheckinKey } from './locales.ts'
 import { styles } from './styles.ts'
 
-/** Injected controller shared by the sidebar and overlay entries. */
-export interface Injected { controller: CheckinController }
+/** Injected factory gives each right-tab occurrence independent request and UI state. */
+export interface Injected { createController: () => CheckinController }
+/** Sidebar entry opens or reveals the check-in page in the host right panel. */
+export interface TriggerInjected { openPanel: () => void }
 type Localized = PropsLocale<'checkin'>
-type PanelProps = PropsRuntime<'shell.overlay'> & Localized & Injected
-type TriggerProps = PropsRuntime<'sidebar.footer.action'> & Localized & Injected
+type PanelProps = PropsRuntime<'sidebar.right.pane.tab'> & Localized & Injected
+type TriggerProps = PropsRuntime<'sidebar.footer.action'> & Localized & TriggerInjected
 const WEEK: CheckinKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 function shiftDate(date: string, days: number): string {
   const value = new Date(`${date}T00:00:00Z`)
@@ -33,26 +35,28 @@ function failureKey(error: string): CheckinKey {
   return 'error'
 }
 /** Sidebar action respects the host's collapsed rail.
- * @param props - Localized shell props and shared controller. @returns Sidebar trigger.
+ * @param props - Localized shell props and right-panel opener. @returns Sidebar trigger.
  */
-export function CheckinTrigger({ wide, t, controller }: TriggerProps) {
-  const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
-  return <><style>{styles}</style><button className="ci-trigger" data-wide={wide} aria-label={t('open')} aria-expanded={state.open} aria-controls="dsh-checkin-panel" onClick={() => state.open ? controller.close() : controller.open()}><CalendarCheck2 size={16} aria-hidden="true" />{wide && <span>{t('title')}</span>}</button></>
+export function CheckinTrigger({ wide, t, openPanel }: TriggerProps) {
+  return <><style aria-hidden="true">{styles}</style><button className="ci-trigger" data-wide={wide} aria-label={t('open')} onClick={openPanel}><CalendarCheck2 size={16} aria-hidden="true" />{wide && <span>{t('title')}</span>}</button></>
 }
 /** Calendar, topic management and daily completion controls.
- * @param props - Localized shell props and shared controller. @returns Overlay or null when closed.
+ * @param props - Localized tab props and per-occurrence controller factory. @returns Right-tab body.
  */
-export function CheckinPanel({ t, controller }: PanelProps) {
+export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
+  const [controller] = useState(createController)
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
+  const { tab } = useTabInfo()
   const { data, busy } = state
+  const titleId = useId()
+  const nameId = useId()
   const [selected, setSelected] = useState('')
   const [topicId, setTopicId] = useState<TopicId | ''>('')
   const [form, setForm] = useState<{ id?: TopicId; name: string } | null>(null)
   const [deleting, setDeleting] = useState<Topic | null>(null)
-  const closeRef = useRef<HTMLButtonElement>(null)
+  const addRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
-  const returnFocus = useRef<HTMLElement | null>(null)
   const focusDay = useRef(false)
   const navigationFocus = useRef<string | null>(null)
   const deleteCancel = useRef<HTMLButtonElement>(null)
@@ -60,38 +64,26 @@ export function CheckinPanel({ t, controller }: PanelProps) {
   useEffect(() => { if (deleting) deleteCancel.current?.focus() }, [deleting])
   const formOpen = form !== null
   const formId = form?.id
-  useEffect(() => {
-    if (!state.open) return
-    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    closeRef.current?.focus()
-    let restoreFocus = true
-    const outside = (event: MouseEvent) => {
-      const target = event.target
-      if (!(target instanceof Node) || panelRef.current?.contains(target)) return
-      // The shared entry owns its toggle; closing here would reopen it on the same click.
-      if (target instanceof Element && target.closest('.ci-trigger[aria-controls="dsh-checkin-panel"]')) return
-      restoreFocus = false
-      controller.close()
-    }
-    const key = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') { controller.close(); event.preventDefault() }
-    }
-    document.addEventListener('keydown', key)
-    document.addEventListener('click', outside, true)
-    return () => {
-      document.removeEventListener('keydown', key)
-      document.removeEventListener('click', outside, true)
-      if (restoreFocus && returnFocus.current?.isConnected) returnFocus.current.focus()
-    }
-  }, [controller, state.open])
   useEffect(() => { if (formOpen) nameRef.current?.focus() }, [formOpen, formId])
+  useEffect(() => () => { controller.dispose() }, [controller])
   useEffect(() => {
-    if (!state.open || !data) return
-    const poll = () => { if (document.visibilityState === 'visible') void controller.refresh(true) }
+    if (!tab.visible || tab.signal.aborted) { controller.cancelRead(); return }
+    void controller.refresh()
+    return () => { controller.cancelRead() }
+  }, [controller, tab.signal, tab.visible])
+  useEffect(() => {
+    const cancel = () => { controller.cancelRead() }
+    if (tab.signal.aborted) { cancel(); return }
+    tab.signal.addEventListener('abort', cancel, { once: true })
+    return () => { tab.signal.removeEventListener('abort', cancel) }
+  }, [controller, tab.signal])
+  useEffect(() => {
+    if (!tab.visible || tab.signal.aborted || !data) return
+    const poll = () => { if (!tab.signal.aborted && document.visibilityState === 'visible') void controller.refresh(true) }
     const timer = window.setInterval(poll, data.refreshIntervalMs)
     document.addEventListener('visibilitychange', poll)
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', poll) }
-  }, [controller, state.open, data?.refreshIntervalMs, Boolean(data)])
+  }, [controller, tab.signal, tab.visible, data?.refreshIntervalMs, Boolean(data)])
   useEffect(() => {
     if (!data) return
     if (selected.slice(0, 7) !== data.month) setSelected(data.today.startsWith(data.month) ? data.today : data.from)
@@ -106,7 +98,6 @@ export function CheckinPanel({ t, controller }: PanelProps) {
       navigationFocus.current = null
     }
   }, [data, selected])
-  if (!state.open) return null
   const topics = data?.topics.filter(topic => !topicId || topic.id === topicId) ?? []
   const complete = new Set(data?.completions.map(row => `${row.date}/${row.topicId}`))
   const count = (date: string) => topics.filter(topic => complete.has(`${date}/${topic.id}`)).length
@@ -137,14 +128,14 @@ export function CheckinPanel({ t, controller }: PanelProps) {
     if (!form) return
     const request = form
     const saved = await controller.mutate((api, signal) => request.id ? api.update({ id: request.id, name: request.name }, signal) : api.create({ name: request.name }, signal))
-    if (saved) { setForm(null); closeRef.current?.focus() }
+    if (saved) { setForm(null); addRef.current?.focus() }
   }
-  return <section ref={panelRef} className="dsh-checkin ci-panel" id="dsh-checkin-panel" role="dialog" aria-modal="false" aria-labelledby="ci-title">
-    <header className="ci-header"><div><h2 id="ci-title">{t('title')}</h2><p className="ci-subtitle">{t('subtitle')}</p></div><button ref={closeRef} className="ci-icon" aria-label={t('close')} onClick={() => controller.close()}><X size={20} /></button></header>
+  return <section ref={panelRef} className="dsh-checkin ci-panel" aria-labelledby={titleId}>
+    <header className="ci-header"><h2 id={titleId}>{t('title')}</h2><p className="ci-subtitle">{t('subtitle')}</p></header>
     <div className="ci-scroll">
-      <div className="ci-toolbar"><div className="ci-filter"><select className="ci-select" aria-label={t('filter')} value={topicId} onChange={event => setTopicId(event.target.value as TopicId | '')}><option value="">{t('all')}</option>{data?.topics.map(topic => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select><ChevronDown size={16} aria-hidden="true" /></div><button className="ci-button ci-primary" disabled={busy} onClick={() => beginForm()}><Plus size={16} />{t('add')}</button></div>
-      {form && <form className="ci-form" onSubmit={event => { event.preventDefault(); void submit() }}><label htmlFor="ci-name">{form.id ? t('rename') : t('name')}</label><input ref={nameRef} id="ci-name" value={form.name} placeholder={t('placeholder')} required maxLength={200} disabled={busy} onChange={event => setForm({ ...form, name: event.target.value })} /><div className="ci-actions"><button type="button" className="ci-button" disabled={busy} onClick={() => { setForm(null); closeRef.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-primary" disabled={busy || !form.name.trim()}>{busy ? t('busy') : t('save')}</button></div></form>}
-      {deleting && <div className="ci-confirm" role="group" aria-label={t('deleteTitle', { name: deleting.name })}><h3>{t('deleteTitle', { name: deleting.name })}</h3><p>{t('deleteHint')}</p><div className="ci-actions"><button ref={deleteCancel} className="ci-button" disabled={busy} onClick={() => { setDeleting(null); deleteTrigger.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-danger" disabled={busy} onClick={() => { void controller.mutate((api, signal) => api.delete({ id: deleting.id }, signal)).then(saved => { if (saved) { setDeleting(null); closeRef.current?.focus() } }) }}>{t('confirmDelete')}</button></div></div>}
+      <div className="ci-toolbar"><div className="ci-filter"><select className="ci-select" aria-label={t('filter')} value={topicId} onChange={event => setTopicId(event.target.value as TopicId | '')}><option value="">{t('all')}</option>{data?.topics.map(topic => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select><ChevronDown size={16} aria-hidden="true" /></div><button ref={addRef} className="ci-button ci-primary" disabled={busy} onClick={() => beginForm()}><Plus size={16} />{t('add')}</button></div>
+      {form && <form className="ci-form" onSubmit={event => { event.preventDefault(); void submit() }}><label htmlFor={nameId}>{form.id ? t('rename') : t('name')}</label><input ref={nameRef} id={nameId} value={form.name} placeholder={t('placeholder')} required maxLength={200} disabled={busy} onChange={event => setForm({ ...form, name: event.target.value })} /><div className="ci-actions"><button type="button" className="ci-button" disabled={busy} onClick={() => { setForm(null); addRef.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-primary" disabled={busy || !form.name.trim()}>{busy ? t('busy') : t('save')}</button></div></form>}
+      {deleting && <div className="ci-confirm" role="group" aria-label={t('deleteTitle', { name: deleting.name })}><h3>{t('deleteTitle', { name: deleting.name })}</h3><p>{t('deleteHint')}</p><div className="ci-actions"><button ref={deleteCancel} className="ci-button" disabled={busy} onClick={() => { setDeleting(null); deleteTrigger.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-danger" disabled={busy} onClick={() => { void controller.mutate((api, signal) => api.delete({ id: deleting.id }, signal)).then(saved => { if (saved) { setDeleting(null); addRef.current?.focus() } }) }}>{t('confirmDelete')}</button></div></div>}
       {state.error && <div className="ci-alert" role="alert"><span>{t(failureKey(state.error))}</span><button className="ci-button" disabled={busy} onClick={() => { void controller.refresh() }}>{t('retry')}</button></div>}
       {state.loading && <div className="ci-status" role="status">{t('loading')}</div>}
       {data && data.topics.length === 0 && <div className="ci-empty"><CalendarCheck2 className="ci-empty-icon" size={36} strokeWidth={1.5} aria-hidden="true" /><h3>{t('empty')}</h3><p>{t('emptyHint')}</p><button className="ci-button" disabled={busy} onClick={() => beginForm()}><Plus size={16} />{t('add')}</button></div>}
