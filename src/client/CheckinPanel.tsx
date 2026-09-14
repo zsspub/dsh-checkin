@@ -7,6 +7,8 @@ import type { Topic, TopicId } from '../types.ts'
 import { CheckinController } from './controller.ts'
 import type { CheckinKey } from './locales.ts'
 import { styles } from './styles.ts'
+import { ConnectionPanel } from './ConnectionPanel.tsx'
+import { failureKey } from './errors.ts'
 
 /** Injected factory gives each right-tab occurrence independent request and UI state. */
 export interface Injected { createController: () => CheckinController }
@@ -26,14 +28,8 @@ function shiftMonth(month: string, amount: number): string {
   value.setUTCMonth(value.getUTCMonth() + amount)
   return value.toISOString().slice(0, 7)
 }
-function failureKey(error: string): CheckinKey {
-  if (error.includes('duplicate-name')) return 'duplicate'
-  if (error.includes('invalid-name')) return 'invalidName'
-  if (error.includes('topic-not-found')) return 'notFound'
-  if (error.includes('future-date')) return 'future'
-  if (error.includes('invalid-date') || error.includes('invalid-range')) return 'invalidDate'
-  return 'error'
-}
+const noConnection = () => null
+const noSubscription = () => () => undefined
 /** Sidebar action respects the host's collapsed rail.
  * @param props - Localized shell props and right-panel opener. @returns Sidebar trigger.
  */
@@ -46,6 +42,8 @@ export function CheckinTrigger({ wide, t, openPanel }: TriggerProps) {
 export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
   const [controller] = useState(createController)
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
+  const connection = useSyncExternalStore(controller.connection?.subscribe ?? noSubscription, controller.connection?.getSnapshot ?? noConnection)
+  const connected = !controller.connection || connection?.connection?.phase === 'connected' && !connection.busy
   const { tab } = useTabInfo()
   const { data, busy } = state
   const titleId = useId()
@@ -70,7 +68,7 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
     if (!tab.visible || tab.signal.aborted) { controller.cancelRead(); return }
     void controller.refresh()
     return () => { controller.cancelRead() }
-  }, [controller, tab.signal, tab.visible])
+  }, [controller, tab.signal, tab.visible, connection?.connection?.revision, connection?.busy])
   useEffect(() => {
     const cancel = () => { controller.cancelRead() }
     if (tab.signal.aborted) { cancel(); return }
@@ -78,9 +76,9 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
     return () => { tab.signal.removeEventListener('abort', cancel) }
   }, [controller, tab.signal])
   useEffect(() => {
-    if (!tab.visible || tab.signal.aborted || !data) return
+    if (!tab.visible || tab.signal.aborted) return
     const poll = () => { if (!tab.signal.aborted && document.visibilityState === 'visible') void controller.refresh(true) }
-    const timer = window.setInterval(poll, data.refreshIntervalMs)
+    const timer = window.setInterval(poll, data?.refreshIntervalMs ?? 30000)
     document.addEventListener('visibilitychange', poll)
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', poll) }
   }, [controller, tab.signal, tab.visible, data?.refreshIntervalMs, Boolean(data)])
@@ -89,6 +87,7 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
     if (selected.slice(0, 7) !== data.month) setSelected(data.today.startsWith(data.month) ? data.today : data.from)
     if (topicId && !data.topics.some(topic => topic.id === topicId)) setTopicId('')
   }, [data, selected, topicId])
+  useEffect(() => { setForm(null); setDeleting(null); setSelected(''); setTopicId('') }, [connection?.connection?.revision])
   useEffect(() => {
     if (focusDay.current && data && selected.startsWith(data.month)) {
       panelRef.current?.querySelector<HTMLButtonElement>(`button[data-date="${selected}"]`)?.focus()
@@ -133,6 +132,8 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
   return <section ref={panelRef} className="dsh-checkin ci-panel" aria-labelledby={titleId}>
     <header className="ci-header"><h2 id={titleId}>{t('title')}</h2><p className="ci-subtitle">{t('subtitle')}</p></header>
     <div className="ci-scroll">
+      {controller.connection && <ConnectionPanel controller={controller.connection} t={t} />}
+      {connected && <>
       <div className="ci-toolbar"><div className="ci-filter"><select className="ci-select" aria-label={t('filter')} value={topicId} onChange={event => setTopicId(event.target.value as TopicId | '')}><option value="">{t('all')}</option>{data?.topics.map(topic => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select><ChevronDown size={16} aria-hidden="true" /></div><button ref={addRef} className="ci-button ci-primary" disabled={busy} onClick={() => beginForm()}><Plus size={16} />{t('add')}</button></div>
       {form && <form className="ci-form" onSubmit={event => { event.preventDefault(); void submit() }}><label htmlFor={nameId}>{form.id ? t('rename') : t('name')}</label><input ref={nameRef} id={nameId} value={form.name} placeholder={t('placeholder')} required maxLength={200} disabled={busy} onChange={event => setForm({ ...form, name: event.target.value })} /><div className="ci-actions"><button type="button" className="ci-button" disabled={busy} onClick={() => { setForm(null); addRef.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-primary" disabled={busy || !form.name.trim()}>{busy ? t('busy') : t('save')}</button></div></form>}
       {deleting && <div className="ci-confirm" role="group" aria-label={t('deleteTitle', { name: deleting.name })}><h3>{t('deleteTitle', { name: deleting.name })}</h3><p>{t('deleteHint')}</p><div className="ci-actions"><button ref={deleteCancel} className="ci-button" disabled={busy} onClick={() => { setDeleting(null); deleteTrigger.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-danger" disabled={busy} onClick={() => { void controller.mutate((api, signal) => api.delete({ id: deleting.id }, signal)).then(saved => { if (saved) { setDeleting(null); addRef.current?.focus() } }) }}>{t('confirmDelete')}</button></div></div>}
@@ -147,6 +148,7 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
           const done = complete.has(`${selected}/${topic.id}`)
           return <div className="ci-row" key={topic.id}><button role="checkbox" className="ci-toggle" aria-checked={done} aria-label={t(done ? 'unset' : 'set', { name: topic.name })} disabled={busy || future || !selected || !selected.startsWith(data.month)} onClick={() => { void controller.mutate((api, signal) => api.set({ topicId: topic.id, date: selected, completed: !done }, signal)) }}>{done && <Check size={16} />}</button><span className="ci-row-name">{topic.name}</span><button className="ci-icon" aria-label={`${t('rename')} ${topic.name}`} disabled={busy} onClick={() => beginForm(topic)}><Pencil size={14} /></button><button className="ci-icon" aria-label={`${t('remove')} ${topic.name}`} disabled={busy} onClick={event => { deleteTrigger.current = event.currentTarget; setForm(null); setDeleting(topic) }}><Trash2 size={14} /></button></div>
         })}</section>
+      </>}
       </>}
     </div><footer className="ci-footer">{busy ? t('busy') : t('tz')}</footer>
   </section>

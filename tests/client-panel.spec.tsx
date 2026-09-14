@@ -154,3 +154,30 @@ it('opens the host right tab from the sidebar entry', () => {
   fireEvent.click(screen.getByRole('button', { name: '打开打卡' }))
   expect(openPanel).toHaveBeenCalledOnce()
 })
+
+it.each([
+  ['checkin/invalid-config', zh.databaseConfig],
+  ['checkin/unauthorized', zh.unauthorized],
+  ['checkin/quota-exceeded', zh.quota],
+  ['checkin/write-uncertain', zh.writeUncertain],
+  ['checkin/invalid-schema', zh.invalidSchema],
+  ['checkin/query-rejected', zh.queryRejected],
+  ['checkin/api-unavailable', zh.apiUnavailable],
+  ['checkin/request-too-large', zh.requestTooLarge],
+  ['checkin/concurrent-change', zh.concurrentChange],
+])('preserves input and offers a read-only retry for %s', async (code, message) => {
+  const { api, dispose } = mount()
+  try {
+    api.create = vi.fn(async () => { throw new Error(code) })
+    await screen.findByRole('grid')
+    fireEvent.click(screen.getByRole('button', { name: '新建主题' }))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '新主题' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect((await screen.findByRole('alert')).textContent).toContain(message)
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('新主题')
+    const reads = vi.mocked(api.month).mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() => expect(vi.mocked(api.month).mock.calls.length).toBeGreaterThan(reads))
+    expect(api.create).toHaveBeenCalledTimes(1)
+  } finally { dispose() }
+})

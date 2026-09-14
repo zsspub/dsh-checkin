@@ -1,11 +1,6 @@
+import { type StoreConfig } from './database.ts';
 import type { CheckinResult, DeleteResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicId, TopicList } from '../types.ts';
-/** Current SQLite schema; newer databases are refused without modification. */
-export declare const SCHEMA_VERSION = 1;
-/** Deployment choices resolved before opening a database. */
-export interface StoreConfig {
-    databasePath: string;
-    busyTimeoutMs: number;
-}
+export type { StoreConfig } from './database.ts';
 /** Calendar date in Beijing, independent of the machine's time zone.
  * @param now - Instant to project. @returns YYYY-MM-DD date.
  */
@@ -21,26 +16,21 @@ export declare function monthRange(month: string): {
     from: string;
     to: string;
 };
-/** One connection, prepared writes, and atomic catalog/record snapshots. */
 export declare class CheckinStore {
     private readonly now;
-    private readonly db;
-    /** @param config - Absolute path and lock timeout. @param now - Clock used by date-sensitive operations. */
+    private readonly database;
+    private queue;
     constructor(config: StoreConfig, now?: () => Date);
-    private transaction;
+    private serialize;
+    private data;
     private topic;
-    /** Release the connection when the owning plugin unloads. */
+    private record;
+    private records;
     close(): void;
-    /** @returns Current catalog and Beijing date. */
-    list(): TopicList;
-    /** @param rawName - User-entered name. @returns Created topic. */
-    create(rawName: string): Topic;
-    /** @param id - Existing topic. @param rawName - Replacement name. @returns Updated topic. */
-    update(id: TopicId, rawName: string): Topic;
-    /** @param id - Topic to permanently remove. @returns Removed topic and completion count. */
-    delete(id: TopicId): DeleteResult;
-    /** @param request - Explicit desired status. @returns Actual date, topic and status. */
-    set(request: SetCheckin): CheckinResult;
-    /** @param request - Inclusive date range. @returns Current topics and sparse completed days. */
-    query(request: QueryCheckins): QueryResult;
+    list(signal?: AbortSignal): Promise<TopicList>;
+    create(rawName: string, signal?: AbortSignal): Promise<Topic>;
+    update(id: TopicId, rawName: string, signal?: AbortSignal): Promise<Topic>;
+    delete(id: TopicId, signal?: AbortSignal): Promise<DeleteResult>;
+    set(request: SetCheckin, signal?: AbortSignal): Promise<CheckinResult>;
+    query(request: QueryCheckins, signal?: AbortSignal): Promise<QueryResult>;
 }

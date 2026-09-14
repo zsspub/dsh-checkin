@@ -1,17 +1,7 @@
-/** SQLite owns the global topic catalog and sparse daily completions. */
-import { randomUUID } from 'node:crypto'
-import { chmodSync, mkdirSync } from 'node:fs'
-import { dirname, isAbsolute } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
-import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import type { CheckinErrorCode } from '../types.ts'
-function failure(code: CheckinErrorCode): RemoteError<CheckinErrorCode> { return new RemoteError(code, code, {}) }
+import { PubDatabase, failure, type DatabaseRecord, type StoreConfig } from './database.ts'
 import type { CheckinResult, Completion, DeleteResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicId, TopicList } from '../types.ts'
 
-/** Current SQLite schema; newer databases are refused without modification. */
-export const SCHEMA_VERSION = 1
-/** Deployment choices resolved before opening a database. */
-export interface StoreConfig { databasePath: string; busyTimeoutMs: number }
+export type { StoreConfig } from './database.ts'
 /** Calendar date in Beijing, independent of the machine's time zone.
  * @param now - Instant to project. @returns YYYY-MM-DD date.
  */
@@ -39,95 +29,106 @@ function validName(value: string): string {
   if (!name || name.length > 200) throw failure('checkin/invalid-name')
   return name
 }
-/** One connection, prepared writes, and atomic catalog/record snapshots. */
 export class CheckinStore {
-  private readonly db: DatabaseSync
-  /** @param config - Absolute path and lock timeout. @param now - Clock used by date-sensitive operations. */
+  private readonly database: PubDatabase
+  private queue: Promise<unknown> = Promise.resolve()
+
   constructor(config: StoreConfig, private readonly now: () => Date = () => new Date()) {
-    if (!isAbsolute(config.databasePath) || !Number.isSafeInteger(config.busyTimeoutMs) || config.busyTimeoutMs < 1) throw failure('checkin/invalid-config')
-    mkdirSync(dirname(config.databasePath), { recursive: true, mode: 0o700 })
-    this.db = new DatabaseSync(config.databasePath)
+    this.database = new PubDatabase(config)
+  }
+
+  private serialize<Result>(run: () => Promise<Result>, signal?: AbortSignal): Promise<Result> {
+    const pending = this.queue.then(() => { signal?.throwIfAborted(); return run() })
+    this.queue = pending.catch(() => {})
+    return pending
+  }
+
+  private data(record: DatabaseRecord) {
     try {
-      chmodSync(config.databasePath, 0o600)
-      const version = this.db.prepare('PRAGMA user_version').get()?.user_version
-      if (typeof version !== 'number' || version > SCHEMA_VERSION) throw failure('checkin/newer-schema')
-      this.db.exec(`PRAGMA busy_timeout = ${config.busyTimeoutMs}; PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;`)
-      if (version === 0) this.transaction(() => {
-        this.db.exec(`CREATE TABLE topics (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL);
-          CREATE TABLE completions (topicId TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE, date TEXT NOT NULL, PRIMARY KEY(topicId, date));
-          CREATE INDEX completions_date ON completions(date);
-          PRAGMA user_version = 1;`)
-      })
-    } catch (error) { this.db.close(); throw error }
+      if (validName(record.name) !== record.name) throw failure('checkin/invalid-data')
+    } catch { throw failure('checkin/invalid-data') }
+    return record
   }
-  private transaction<T>(run: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE')
-    try { const result = run(); this.db.exec('COMMIT'); return result }
-    catch (error) { this.db.exec('ROLLBACK'); throw error }
+
+  private topic(record: DatabaseRecord): Topic {
+    return { id: record.id as TopicId, name: this.data(record).name, createdAt: record.createdAt, updatedAt: record.updatedAt }
   }
-  private topic(id: TopicId): Topic {
-    const row = this.db.prepare('SELECT id,name,createdAt,updatedAt FROM topics WHERE id=?').get(id)
-    if (!row) throw failure('checkin/topic-not-found')
-    return row as unknown as Topic
+
+  private async record(id: TopicId, signal?: AbortSignal): Promise<DatabaseRecord> {
+    const record = await this.database.get(id, signal)
+    if (!record) throw failure('checkin/topic-not-found')
+    this.data(record)
+    return record
   }
-  /** Release the connection when the owning plugin unloads. */
-  close(): void { this.db.close() }
-  /** @returns Current catalog and Beijing date. */
-  list(): TopicList {
-    return { today: todayInBeijing(this.now()), timeZone: 'Asia/Shanghai', topics: this.db.prepare('SELECT id,name,createdAt,updatedAt FROM topics ORDER BY createdAt,id').all() as unknown as Topic[] }
+
+  private async records(signal?: AbortSignal): Promise<DatabaseRecord[]> {
+    const records = await this.database.list(signal)
+    for (const record of records) this.data(record)
+    return records.sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
   }
-  /** @param rawName - User-entered name. @returns Created topic. */
-  create(rawName: string): Topic {
+
+  close(): void { this.database.close() }
+
+  list(signal?: AbortSignal): Promise<TopicList> {
+    return this.serialize(async () => {
+      const records = await this.records(signal)
+      return { today: todayInBeijing(this.now()), timeZone: 'Asia/Shanghai', topics: records.map(record => this.topic(record)) }
+    }, signal)
+  }
+
+  async create(rawName: string, signal?: AbortSignal): Promise<Topic> {
     const name = validName(rawName)
-    return this.transaction(() => {
-      if (this.db.prepare('SELECT id FROM topics WHERE name=?').get(name)) throw failure('checkin/duplicate-name')
-      const topic: Topic = { id: randomUUID() as TopicId, name, createdAt: this.now().toISOString(), updatedAt: this.now().toISOString() }
-      this.db.prepare('INSERT INTO topics VALUES(?,?,?,?)').run(topic.id, name, topic.createdAt, topic.updatedAt)
-      return topic
-    })
+    return this.serialize(async () => {
+      const records = await this.records(signal)
+      if (records.some(record => this.data(record).name === name)) throw failure('checkin/duplicate-name')
+      return this.topic(await this.database.create(name, this.now().toISOString(), signal))
+    }, signal)
   }
-  /** @param id - Existing topic. @param rawName - Replacement name. @returns Updated topic. */
-  update(id: TopicId, rawName: string): Topic {
+
+  async update(id: TopicId, rawName: string, signal?: AbortSignal): Promise<Topic> {
     const name = validName(rawName)
-    return this.transaction(() => {
-      this.topic(id)
-      if (this.db.prepare('SELECT id FROM topics WHERE name=? AND id<>?').get(name, id)) throw failure('checkin/duplicate-name')
-      this.db.prepare('UPDATE topics SET name=?,updatedAt=? WHERE id=?').run(name, this.now().toISOString(), id)
-      return this.topic(id)
-    })
+    return this.serialize(async () => {
+      const records = await this.records(signal)
+      const record = await this.record(id, signal)
+      if (records.some(candidate => candidate.id !== id && this.data(candidate).name === name)) throw failure('checkin/duplicate-name')
+      if (record.name === name) return this.topic(record)
+      return this.topic(await this.database.update(record, { name }, this.now().toISOString(), signal))
+    }, signal)
   }
-  /** @param id - Topic to permanently remove. @returns Removed topic and completion count. */
-  delete(id: TopicId): DeleteResult {
-    return this.transaction(() => {
-      const topic = this.topic(id)
-      const deletedRecords = Number(this.db.prepare('SELECT count(*) AS count FROM completions WHERE topicId=?').get(id)?.count)
-      this.db.prepare('DELETE FROM topics WHERE id=?').run(id)
+
+  delete(id: TopicId, signal?: AbortSignal): Promise<DeleteResult> {
+    return this.serialize(async () => {
+      const record = await this.record(id, signal)
+      const topic = this.topic(record)
+      const deletedRecords = await this.database.delete(record, signal)
       return { topic, deletedRecords }
-    })
+    }, signal)
   }
-  /** @param request - Explicit desired status. @returns Actual date, topic and status. */
-  set(request: SetCheckin): CheckinResult {
+
+  async set(request: SetCheckin, signal?: AbortSignal): Promise<CheckinResult> {
     const today = todayInBeijing(this.now())
     const date = validDate(request.date ?? today)
     if (date > today) throw failure('checkin/future-date')
-    return this.transaction(() => {
-      const topic = this.topic(request.topicId)
-      if (request.completed) this.db.prepare('INSERT OR IGNORE INTO completions(topicId,date) VALUES(?,?)').run(topic.id, date)
-      else this.db.prepare('DELETE FROM completions WHERE topicId=? AND date=?').run(topic.id, date)
+    return this.serialize(async () => {
+      const record = await this.record(request.topicId, signal)
+      const topic = this.topic(record)
+      await this.database.set(record, date, request.completed, this.now().toISOString(), signal)
       return { topic, date, completed: request.completed }
-    })
+    }, signal)
   }
-  /** @param request - Inclusive date range. @returns Current topics and sparse completed days. */
-  query(request: QueryCheckins): QueryResult {
+
+  async query(request: QueryCheckins, signal?: AbortSignal): Promise<QueryResult> {
     const from = validDate(request.from), to = validDate(request.to)
     if (from > to) throw failure('checkin/invalid-range')
-    return this.transaction(() => {
-      const list = this.list()
-      const topics = request.topicId === undefined ? list.topics : [this.topic(request.topicId)]
-      const completions = (request.topicId === undefined
-        ? this.db.prepare('SELECT topicId,date FROM completions WHERE date BETWEEN ? AND ? ORDER BY date,topicId').all(from, to)
-        : this.db.prepare('SELECT topicId,date FROM completions WHERE date BETWEEN ? AND ? AND topicId=? ORDER BY date').all(from, to, request.topicId)) as unknown as Completion[]
-      return { ...list, from, to, topics, completions }
-    })
+    return this.serialize(async () => {
+      const records = (await this.records(signal)).filter(record => request.topicId === undefined || record.id === request.topicId)
+      if (request.topicId !== undefined && !records.length) throw failure('checkin/topic-not-found')
+      const topics = records.map(record => this.topic(record))
+      const rows = await this.database.completions(from, to, request.topicId, signal)
+      const ids = new Set(records.map(record => record.id))
+      if (rows.some(row => !ids.has(row.topicId))) throw failure('checkin/inconsistent-read')
+      const completions: Completion[] = rows.map(row => ({ topicId: row.topicId as TopicId, date: row.date }))
+      return { today: todayInBeijing(this.now()), timeZone: 'Asia/Shanghai', topics, from, to, completions }
+    }, signal)
   }
 }

@@ -1,5 +1,6 @@
 /** Right-tab state and latest-request-wins reads, independent of React and transport. */
 import type { CreateTopic, MonthRequest, MonthResult, SetCheckin, TopicRequest, UpdateTopic } from '../types.ts'
+import type { ConnectionController } from './connection-controller.ts'
 /** Typed Host methods used by the right-tab UI. */
 export interface CheckinApi {
   month(request: MonthRequest, signal: AbortSignal): Promise<MonthResult>
@@ -17,8 +18,20 @@ export class CheckinController {
   private reader: AbortController | undefined
   private writer: AbortController | undefined
   private disposed = false
+  private unsubscribe: (() => void) | undefined
+  private connectionRevision: string | undefined
   /** @param api - Generated Remote adapter. */
-  constructor(private readonly api: CheckinApi) {}
+  constructor(private readonly api: CheckinApi, readonly connection?: ConnectionController) {
+    this.connectionRevision = connection?.getSnapshot().connection?.revision
+    this.unsubscribe = connection?.subscribe(() => {
+      const revision = connection.getSnapshot().connection?.revision
+      if (revision === this.connectionRevision && !connection.getSnapshot().busy) return
+      this.connectionRevision = revision
+      this.reader?.abort()
+      this.writer?.abort()
+      this.publish({ data: null, month: undefined, loading: false, busy: false, error: null })
+    })
+  }
   /** @returns Immutable snapshot for React. */
   getSnapshot = (): Snapshot => this.state
   /** @param listener - Snapshot observer. @returns Disposer. */
@@ -40,6 +53,11 @@ export class CheckinController {
     this.reader = reader
     this.publish({ loading: this.state.data === null, ...(!silent ? { error: null } : {}) })
     try {
+      if (this.connection) {
+        const connected = await this.connection.refresh(reader.signal)
+        if (!connected || connected.phase !== 'connected') { this.publish({ data: null, loading: false }); return }
+        if (reader.signal.aborted) return
+      }
       const data = await this.api.month(this.state.month === undefined ? {} : { month: this.state.month }, reader.signal)
       if (reader.signal.aborted || this.disposed) return
       this.publish({ data, month: data.month, loading: false })
@@ -66,5 +84,5 @@ export class CheckinController {
     }
   }
   /** Stop all requests and observers on plugin unload. */
-  dispose(): void { this.disposed = true; this.reader?.abort(); this.writer?.abort(); this.listeners.clear() }
+  dispose(): void { this.disposed = true; this.reader?.abort(); this.writer?.abort(); this.unsubscribe?.(); this.listeners.clear() }
 }

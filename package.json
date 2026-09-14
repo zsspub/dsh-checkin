@@ -1,7 +1,7 @@
 {
   "name": "dsh-checkin",
   "version": "0.1.0",
-  "description": "Daily check-in tools and a Host-native right-side calendar tab backed by node:sqlite",
+  "description": "Daily check-in tools and a Host-native right-side calendar tab backed by the Pub database API",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -85,6 +85,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-credentials": "0.1.5-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.1",
     "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.1"
   },
@@ -99,6 +100,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar-right": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
     "@deepseek-ai/dsh-code-runtime": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-credentials": "0.1.5-rc.1",
     "@deepseek-ai/dsh-invariants": "0.1.5-rc.1",
     "@deepseek-ai/dsh-llm": "0.1.5-rc.1",
     "@deepseek-ai/dsh-scope": "0.1.5-rc.1",

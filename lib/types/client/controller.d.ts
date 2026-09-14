@@ -1,5 +1,6 @@
 /** Right-tab state and latest-request-wins reads, independent of React and transport. */
 import type { CreateTopic, MonthRequest, MonthResult, SetCheckin, TopicRequest, UpdateTopic } from '../types.ts';
+import type { ConnectionController } from './connection-controller.ts';
 /** Typed Host methods used by the right-tab UI. */
 export interface CheckinApi {
     month(request: MonthRequest, signal: AbortSignal): Promise<MonthResult>;
@@ -19,13 +20,16 @@ export interface Snapshot {
 /** Owns in-flight reads and UI writes; disposing cancels all requests. */
 export declare class CheckinController {
     private readonly api;
+    readonly connection?: ConnectionController | undefined;
     private state;
     private readonly listeners;
     private reader;
     private writer;
     private disposed;
+    private unsubscribe;
+    private connectionRevision;
     /** @param api - Generated Remote adapter. */
-    constructor(api: CheckinApi);
+    constructor(api: CheckinApi, connection?: ConnectionController | undefined);
     /** @returns Immutable snapshot for React. */
     getSnapshot: () => Snapshot;
     /** @param listener - Snapshot observer. @returns Disposer. */

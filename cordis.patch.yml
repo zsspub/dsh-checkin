@@ -2,8 +2,9 @@
     - id: checkin
       name: dsh-checkin
       config:
-        databasePath: !!js dshHomePath('checkin/checkin.sqlite3')
-        busyTimeoutMs: 5000
-        refreshIntervalMs: 3000
+        tableName: checkin_topics
+        recordsTableName: checkin_records
+        requestTimeoutMs: 15000
+        refreshIntervalMs: 30000
     - id: checkin-tools
       name: dsh-checkin/tools
