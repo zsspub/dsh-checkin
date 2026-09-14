@@ -67,6 +67,12 @@ describe('Pub database transport', () => {
     expect(server.fetcher).toHaveBeenCalledTimes(1)
   })
 
+  it('maps Better Auth 401 rate limits without treating the key as invalid', async () => {
+    server.fetcher.mockResolvedValueOnce(Response.json({ code: 'RATE_LIMITED', message: 'Rate limit exceeded.' }, { status: 401 }))
+    await expect(database.list()).rejects.toThrow('rate-limited')
+    expect(server.fetcher).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects login HTML and malformed successful responses', async () => {
     server.fetcher.mockResolvedValueOnce(new Response('<html>login</html>'))
     await expect(database.list()).rejects.toThrow('invalid-response')

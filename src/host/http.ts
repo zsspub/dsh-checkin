@@ -23,6 +23,16 @@ export class PubClient {
       })
     } catch { throw failure(write ? 'checkin/write-uncertain' : 'checkin/service-unavailable') }
     if (response.ok) return response
+    if (response.status === 401) {
+      let rateLimited = false
+      try {
+        const body = await response.clone().json()
+        rateLimited = body && typeof body === 'object' && 'code' in body && body.code === 'RATE_LIMITED'
+      } catch {
+        rateLimited = false
+      }
+      if (rateLimited) throw failure('checkin/rate-limited')
+    }
     if (response.status === 400) throw failure('checkin/query-rejected')
     if (response.status === 401 || response.status === 403) throw failure('checkin/unauthorized')
     if (response.status === 404) throw failure('checkin/api-unavailable')
