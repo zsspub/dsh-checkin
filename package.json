@@ -1,7 +1,7 @@
 {
   "name": "dsh-checkin",
   "version": "0.1.0",
-  "description": "Daily check-in tools and a Host-native right-side calendar tab backed by the Pub database API",
+  "description": "Daily check-in tools and a Host-native right-side calendar tab backed by node:sqlite",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -44,6 +44,7 @@
       "inject": [
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-primitives",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-sidebar-right"
@@ -81,13 +82,13 @@
     "@deepseek-ai/dsh-api-remotes": "0.1.5-rc.1",
     "@deepseek-ai/dsh-brand": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-locale": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-credentials": "0.1.5-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.1"
+    "@deepseek-ai/dsh-typert-protocol": "0.1.6-alpha.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
@@ -95,12 +96,12 @@
     "@deepseek-ai/dsh-api-remotes": "0.1.5-rc.1",
     "@deepseek-ai/dsh-brand": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-locale": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-sidebar-right": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
     "@deepseek-ai/dsh-code-runtime": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-credentials": "0.1.5-rc.1",
     "@deepseek-ai/dsh-invariants": "0.1.5-rc.1",
     "@deepseek-ai/dsh-llm": "0.1.5-rc.1",
     "@deepseek-ai/dsh-scope": "0.1.5-rc.1",
@@ -108,8 +109,8 @@
     "@deepseek-ai/dsh-session-projection": "0.1.5-rc.1",
     "@deepseek-ai/dsh-system-prompt": "0.1.5-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-typert-generator": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-typert-protocol": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-typert-generator": "0.1.6-alpha.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.6-alpha.2",
     "@deepseek-ai/dsh-user-approval": "0.1.5-rc.1",
     "@eslint/js": "9.35.0",
     "@testing-library/react": "16.3.0",

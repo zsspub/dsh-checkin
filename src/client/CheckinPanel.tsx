@@ -2,13 +2,13 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { CalendarCheck2, Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
-import type { Topic, TopicId } from '../types.ts'
+import { Button, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { CalendarCheck2, Check, ChevronDown, ChevronLeft, ChevronRight, Database, Download, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { CHECKIN_BACKUP_MAX_BYTES, parseCheckinBackup } from '../backup.ts'
+import type { CheckinBackup, Topic, TopicId } from '../types.ts'
 import { CheckinController } from './controller.ts'
 import type { CheckinKey } from './locales.ts'
 import { styles } from './styles.ts'
-import { ConnectionPanel } from './ConnectionPanel.tsx'
-import { failureKey } from './errors.ts'
 
 /** Injected factory gives each right-tab occurrence independent request and UI state. */
 export interface Injected { createController: () => CheckinController }
@@ -28,8 +28,17 @@ function shiftMonth(month: string, amount: number): string {
   value.setUTCMonth(value.getUTCMonth() + amount)
   return value.toISOString().slice(0, 7)
 }
-const noConnection = () => null
-const noSubscription = () => () => undefined
+function failureKey(error: string): CheckinKey {
+  if (error.includes('duplicate-name')) return 'duplicate'
+  if (error.includes('invalid-name')) return 'invalidName'
+  if (error.includes('topic-not-found')) return 'notFound'
+  if (error.includes('future-date')) return 'future'
+  if (error.includes('invalid-date') || error.includes('invalid-range')) return 'invalidDate'
+  if (error.includes('invalid-backup')) return 'invalidBackup'
+  if (error.includes('backup-too-large')) return 'backupTooLarge'
+  if (error.includes('import-conflict')) return 'importConflict'
+  return 'error'
+}
 /** Sidebar action respects the host's collapsed rail.
  * @param props - Localized shell props and right-panel opener. @returns Sidebar trigger.
  */
@@ -42,8 +51,6 @@ export function CheckinTrigger({ wide, t, openPanel }: TriggerProps) {
 export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
   const [controller] = useState(createController)
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
-  const connection = useSyncExternalStore(controller.connection?.subscribe ?? noSubscription, controller.connection?.getSnapshot ?? noConnection)
-  const connected = !controller.connection || connection?.connection?.phase === 'connected' && !connection.busy
   const { tab } = useTabInfo()
   const { data, busy } = state
   const titleId = useId()
@@ -52,7 +59,14 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
   const [topicId, setTopicId] = useState<TopicId | ''>('')
   const [form, setForm] = useState<{ id?: TopicId; name: string } | null>(null)
   const [deleting, setDeleting] = useState<Topic | null>(null)
+  const [dataOpen, setDataOpen] = useState(false)
+  const [transferReading, setTransferReading] = useState(false)
+  const [transferResult, setTransferResult] = useState<string | null>(null)
+  const [transferError, setTransferError] = useState<CheckinKey | null>(null)
+  const [importing, setImporting] = useState<{ key: number; name: string; json: string; backup: CheckinBackup } | null>(null)
+  const importSequence = useRef(0)
   const addRef = useRef<HTMLButtonElement>(null)
+  const importRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
   const focusDay = useRef(false)
@@ -68,7 +82,7 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
     if (!tab.visible || tab.signal.aborted) { controller.cancelRead(); return }
     void controller.refresh()
     return () => { controller.cancelRead() }
-  }, [controller, tab.signal, tab.visible, connection?.connection?.revision, connection?.busy])
+  }, [controller, tab.signal, tab.visible])
   useEffect(() => {
     const cancel = () => { controller.cancelRead() }
     if (tab.signal.aborted) { cancel(); return }
@@ -76,9 +90,9 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
     return () => { tab.signal.removeEventListener('abort', cancel) }
   }, [controller, tab.signal])
   useEffect(() => {
-    if (!tab.visible || tab.signal.aborted) return
+    if (!tab.visible || tab.signal.aborted || !data) return
     const poll = () => { if (!tab.signal.aborted && document.visibilityState === 'visible') void controller.refresh(true) }
-    const timer = window.setInterval(poll, data?.refreshIntervalMs ?? 30000)
+    const timer = window.setInterval(poll, data.refreshIntervalMs)
     document.addEventListener('visibilitychange', poll)
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', poll) }
   }, [controller, tab.signal, tab.visible, data?.refreshIntervalMs, Boolean(data)])
@@ -87,7 +101,6 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
     if (selected.slice(0, 7) !== data.month) setSelected(data.today.startsWith(data.month) ? data.today : data.from)
     if (topicId && !data.topics.some(topic => topic.id === topicId)) setTopicId('')
   }, [data, selected, topicId])
-  useEffect(() => { setForm(null); setDeleting(null); setSelected(''); setTopicId('') }, [connection?.connection?.revision])
   useEffect(() => {
     if (focusDay.current && data && selected.startsWith(data.month)) {
       panelRef.current?.querySelector<HTMLButtonElement>(`button[data-date="${selected}"]`)?.focus()
@@ -129,15 +142,65 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
     const saved = await controller.mutate((api, signal) => request.id ? api.update({ id: request.id, name: request.name }, signal) : api.create({ name: request.name }, signal))
     if (saved) { setForm(null); addRef.current?.focus() }
   }
+  const downloadBackup = async () => {
+    setTransferError(null)
+    setTransferResult(null)
+    const file = await controller.exportData()
+    if (!file) { setTransferError(failureKey(controller.getSnapshot().error ?? '')); return }
+    const blob = new Blob([file.json], { type: 'application/json;charset=utf-8' })
+    if (blob.size > CHECKIN_BACKUP_MAX_BYTES) { setTransferError('backupTooLarge'); return }
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    try {
+      anchor.href = url
+      anchor.download = file.filename
+      document.body.append(anchor)
+      anchor.click()
+      setTransferResult(t('exportSuccess'))
+    } finally {
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    }
+  }
+  const selectBackup = (file: File) => {
+    const key = ++importSequence.current
+    setForm(null)
+    setDeleting(null)
+    setImporting(null)
+    setTransferError(null)
+    setTransferResult(null)
+    setTransferReading(true)
+    void (async () => {
+      if (file.size > CHECKIN_BACKUP_MAX_BYTES) { setTransferError('backupTooLarge'); return }
+      let json: string
+      try { json = await file.text() } catch { setTransferError('fileReadError'); return }
+      let backup: CheckinBackup
+      try { backup = parseCheckinBackup(json, data?.today) } catch (error) { setTransferError(failureKey(String(error))); return }
+      if (key === importSequence.current) setImporting({ key, name: file.name, json, backup })
+    })().finally(() => { if (key === importSequence.current) setTransferReading(false) })
+  }
+  const confirmImport = async () => {
+    if (!importing) return
+    setTransferError(null)
+    const result = await controller.importData({ json: importing.json })
+    if (!result) { setTransferError(failureKey(controller.getSnapshot().error ?? '')); return }
+    setImporting(null)
+    setTransferResult(t('importSuccess', { ...result }))
+  }
   return <section ref={panelRef} className="dsh-checkin ci-panel" aria-labelledby={titleId}>
     <header className="ci-header"><h2 id={titleId}>{t('title')}</h2><p className="ci-subtitle">{t('subtitle')}</p></header>
     <div className="ci-scroll">
-      {controller.connection && <ConnectionPanel controller={controller.connection} t={t} />}
-      {connected && <>
-      <div className="ci-toolbar"><div className="ci-filter"><select className="ci-select" aria-label={t('filter')} value={topicId} onChange={event => setTopicId(event.target.value as TopicId | '')}><option value="">{t('all')}</option>{data?.topics.map(topic => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select><ChevronDown size={16} aria-hidden="true" /></div><button ref={addRef} className="ci-button ci-primary" disabled={busy} onClick={() => beginForm()}><Plus size={16} />{t('add')}</button></div>
+      <input ref={importRef} type="file" hidden accept=".json,application/json" aria-label={t('importFile')} onChange={event => {
+        const file = event.currentTarget.files?.[0]
+        event.currentTarget.value = ''
+        if (file) selectBackup(file)
+      }} />
+      <div className="ci-toolbar"><div className="ci-filter"><select className="ci-select" aria-label={t('filter')} value={topicId} onChange={event => setTopicId(event.target.value as TopicId | '')}><option value="">{t('all')}</option>{data?.topics.map(topic => <option key={topic.id} value={topic.id}>{topic.name}</option>)}</select><ChevronDown size={16} aria-hidden="true" /></div><div className="ci-toolbar-actions"><Menu open={dataOpen} onClose={() => setDataOpen(false)} align="end" portal dense items={[{ id: 'export', label: t('exportJson'), icon: <Download size={16} aria-hidden="true" />, disabled: busy || transferReading }, { id: 'import', label: t('importJson'), icon: <Upload size={16} aria-hidden="true" />, disabled: busy || transferReading }]} onSelect={id => { setDataOpen(false); if (busy || transferReading) return; if (id === 'export') void downloadBackup(); if (id === 'import') importRef.current?.click() }} anchor={<Button size="md" variant="outline" icon={<Database size={16} aria-hidden="true" />} aria-haspopup="menu" aria-expanded={dataOpen} disabled={busy || transferReading} onClick={() => setDataOpen(current => !current)}>{transferReading ? t('transferBusy') : t('dataMenu')}</Button>} /><button ref={addRef} className="ci-button ci-primary" disabled={busy} onClick={() => beginForm()}><Plus size={16} />{t('add')}</button></div></div>
       {form && <form className="ci-form" onSubmit={event => { event.preventDefault(); void submit() }}><label htmlFor={nameId}>{form.id ? t('rename') : t('name')}</label><input ref={nameRef} id={nameId} value={form.name} placeholder={t('placeholder')} required maxLength={200} disabled={busy} onChange={event => setForm({ ...form, name: event.target.value })} /><div className="ci-actions"><button type="button" className="ci-button" disabled={busy} onClick={() => { setForm(null); addRef.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-primary" disabled={busy || !form.name.trim()}>{busy ? t('busy') : t('save')}</button></div></form>}
       {deleting && <div className="ci-confirm" role="group" aria-label={t('deleteTitle', { name: deleting.name })}><h3>{t('deleteTitle', { name: deleting.name })}</h3><p>{t('deleteHint')}</p><div className="ci-actions"><button ref={deleteCancel} className="ci-button" disabled={busy} onClick={() => { setDeleting(null); deleteTrigger.current?.focus() }}>{t('cancel')}</button><button className="ci-button ci-danger" disabled={busy} onClick={() => { void controller.mutate((api, signal) => api.delete({ id: deleting.id }, signal)).then(saved => { if (saved) { setDeleting(null); addRef.current?.focus() } }) }}>{t('confirmDelete')}</button></div></div>}
-      {state.error && <div className="ci-alert" role="alert"><span>{t(failureKey(state.error))}</span><button className="ci-button" disabled={busy} onClick={() => { void controller.refresh() }}>{t('retry')}</button></div>}
+      {transferError && !importing && <div className="ci-alert" role="alert">{t(transferError)}</div>}
+      {transferResult && <div className="ci-transfer-result" role="status">{transferResult}</div>}
+      {state.error && !transferError && !importing && <div className="ci-alert" role="alert"><span>{t(failureKey(state.error))}</span><button className="ci-button" disabled={busy} onClick={() => { void controller.refresh() }}>{t('retry')}</button></div>}
       {state.loading && <div className="ci-status" role="status">{t('loading')}</div>}
       {data && data.topics.length === 0 && <div className="ci-empty"><CalendarCheck2 className="ci-empty-icon" size={36} strokeWidth={1.5} aria-hidden="true" /><h3>{t('empty')}</h3><p>{t('emptyHint')}</p><button className="ci-button" disabled={busy} onClick={() => beginForm()}><Plus size={16} />{t('add')}</button></div>}
       {data && data.topics.length > 0 && <>
@@ -149,7 +212,7 @@ export function CheckinPanel({ t, createController, useTabInfo }: PanelProps) {
           return <div className="ci-row" key={topic.id}><button role="checkbox" className="ci-toggle" aria-checked={done} aria-label={t(done ? 'unset' : 'set', { name: topic.name })} disabled={busy || future || !selected || !selected.startsWith(data.month)} onClick={() => { void controller.mutate((api, signal) => api.set({ topicId: topic.id, date: selected, completed: !done }, signal)) }}>{done && <Check size={16} />}</button><span className="ci-row-name">{topic.name}</span><button className="ci-icon" aria-label={`${t('rename')} ${topic.name}`} disabled={busy} onClick={() => beginForm(topic)}><Pencil size={14} /></button><button className="ci-icon" aria-label={`${t('remove')} ${topic.name}`} disabled={busy} onClick={event => { deleteTrigger.current = event.currentTarget; setForm(null); setDeleting(topic) }}><Trash2 size={14} /></button></div>
         })}</section>
       </>}
-      </>}
     </div><footer className="ci-footer">{busy ? t('busy') : t('tz')}</footer>
+    <Modal open={importing !== null} onClose={() => { if (!busy) { setImporting(null); setTransferError(null); controller.clearError() } }} title={t('importTitle')} closeLabel={t('importClose')} className="ci-import-dialog" footer={<><Button variant="outline" disabled={busy} onClick={() => { setImporting(null); setTransferError(null); controller.clearError() }}>{t('cancel')}</Button><Button variant="primary" disabled={busy} onClick={() => { void confirmImport() }}>{busy ? t('transferBusy') : t('confirmImport')}</Button></>}><div className="ci-import" aria-busy={busy}>{importing && <><p>{t('importSummary', { filename: importing.name, topics: importing.backup.topics.length, completions: importing.backup.completions.length })}</p><p>{t('importExportedAt', { exportedAt: importing.backup.exportedAt })}</p></>}<p>{t('importWarning')}</p>{transferError && <div className="ci-error" role="alert">{t(transferError)}</div>}</div></Modal>
   </section>
 }

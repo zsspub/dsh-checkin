@@ -2,11 +2,12 @@
 import type { Context } from '@deepseek-ai/cordis';
 import Schema from '@deepseek-ai/schemastery';
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
-import { type StoreConfig } from './host/store.ts';
-import type { ConnectionState, ConnectRequest, DatabaseResources, InitializeRequest, LoginRequest, CheckinResult, CreateTopic, DeleteResult, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicList, TopicRequest, UpdateTopic } from './types.ts';
+import type { CheckinResult, CreateTopic, DeleteResult, ExportDataRequest, ExportDataResult, ImportDataRequest, ImportDataResult, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicList, TopicRequest, UpdateTopic } from './types.ts';
 export type * from './types.ts';
 /** Deployment-owned storage and refresh settings. */
-export interface Config extends StoreConfig {
+export interface Config {
+    databasePath: string;
+    busyTimeoutMs: number;
     refreshIntervalMs: number;
 }
 declare module '@deepseek-ai/cordis' {
@@ -14,18 +15,13 @@ declare module '@deepseek-ai/cordis' {
         checkin: CheckinService;
     }
 }
+/** Global SQLite service; no session or workspace partitioning. */
 export declare class CheckinService extends TypertRemoteService {
     private readonly config;
     static Config: Schema<Config>;
-    private readonly storage;
+    private readonly store;
     /** @param ctx - Host context. @param config - Validated deployment settings. */
     constructor(ctx: Context, config: Config);
-    connection(signal: AbortSignal): Promise<ConnectionState>;
-    login(request: LoginRequest, signal: AbortSignal): Promise<ConnectionState>;
-    resources(signal: AbortSignal): Promise<DatabaseResources>;
-    connect(request: ConnectRequest, signal: AbortSignal): Promise<ConnectionState>;
-    initialize(request: InitializeRequest, signal: AbortSignal): Promise<ConnectionState>;
-    logout(signal: AbortSignal): Promise<ConnectionState>;
     /** @param signal - Request cancellation. @returns Catalog and Beijing date. */
     list(signal: AbortSignal): Promise<TopicList>;
     /** @param request - New name. @param signal - Cancellation. @returns Created topic. */
@@ -40,5 +36,9 @@ export declare class CheckinService extends TypertRemoteService {
     query(request: QueryCheckins, signal: AbortSignal): Promise<QueryResult>;
     /** @param request - Month, defaulting to Beijing's current month. @param signal - Cancellation. @returns Calendar snapshot. */
     month(request: MonthRequest, signal: AbortSignal): Promise<MonthResult>;
+    /** @param _request - Empty request. @param signal - Cancellation. @returns Portable JSON backup. */
+    exportData(_request: ExportDataRequest, signal: AbortSignal): Promise<ExportDataResult>;
+    /** @param request - Confirmed backup. @param signal - Cancellation. @returns Incremental import counts. */
+    importData(request: ImportDataRequest, signal: AbortSignal): Promise<ImportDataResult>;
 }
 export default CheckinService;

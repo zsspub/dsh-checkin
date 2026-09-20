@@ -7,7 +7,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import remote from 'dsh-checkin/remote'
 import { CheckinController, type CheckinApi } from './controller.ts'
-import { ConnectionController } from './connection-controller.ts'
 import { CheckinPanel, CheckinTrigger, type Injected, type TriggerInjected } from './CheckinPanel.tsx'
 import { en, NS, zh, type CheckinKey } from './locales.ts'
 
@@ -41,23 +40,16 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
 
   const unmount = await ctx.remote.$mount(remote)
   const fiber = ctx.inject(['remote.checkin'], scope => {
-    const connection = new ConnectionController({
-      connection: async signal => unwrap(await scope.remote.checkin.connection(signal)),
-      login: async (request, signal) => unwrap(await scope.remote.checkin.login(request, signal)),
-      resources: async signal => unwrap(await scope.remote.checkin.resources(signal)),
-      connect: async (request, signal) => unwrap(await scope.remote.checkin.connect(request, signal)),
-      initialize: async (request, signal) => unwrap(await scope.remote.checkin.initialize(request, signal)),
-      logout: async signal => unwrap(await scope.remote.checkin.logout(signal)),
-    })
-    scope.effect(() => () => connection.dispose(), 'checkin: connection state')
     const api: CheckinApi = {
       month: async (request, signal) => unwrap(await scope.remote.checkin.month(request, signal)),
       create: async (request, signal) => unwrap(await scope.remote.checkin.create(request, signal)),
       update: async (request, signal) => unwrap(await scope.remote.checkin.update(request, signal)),
       delete: async (request, signal) => unwrap(await scope.remote.checkin.delete(request, signal)),
       set: async (request, signal) => unwrap(await scope.remote.checkin.set(request, signal)),
+      exportData: async (request, signal) => unwrap(await scope.remote.checkin.exportData(request, signal)),
+      importData: async (request, signal) => unwrap(await scope.remote.checkin.importData(request, signal)),
     }
-    const panelProps = (): Injected => ({ createController: () => new CheckinController(api, connection) })
+    const panelProps = (): Injected => ({ createController: () => new CheckinController(api) })
     const triggerProps = (): TriggerInjected => ({
       openPanel: () => {
         try {

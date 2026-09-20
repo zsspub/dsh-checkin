@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { CheckinController, type CheckinApi } from '../src/client/controller.ts'
 import type { MonthResult } from '../src/types.ts'
 const month = (m: string): MonthResult => ({ today: '2026-09-10', timeZone: 'Asia/Shanghai', from: `${m}-01`, to: `${m}-30`, month: m, refreshIntervalMs: 3000, topics: [], completions: [] })
-const api = (): CheckinApi => ({ month: vi.fn(async () => month('2026-09')), create: vi.fn(async () => ({})), update: vi.fn(async () => ({})), delete: vi.fn(async () => ({})), set: vi.fn(async () => ({})) })
+const api = (): CheckinApi => ({
+  month: vi.fn(async () => month('2026-09')),
+  create: vi.fn(async () => ({})),
+  update: vi.fn(async () => ({})),
+  delete: vi.fn(async () => ({})),
+  set: vi.fn(async () => ({})),
+  exportData: vi.fn(async () => ({ filename: 'checkin.json', json: '{}' })),
+  importData: vi.fn(async () => ({ importedTopics: 1, importedCompletions: 2, skippedTopics: 0 })),
+})
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r }); return { promise, resolve } }
 describe('right-tab requests', () => {
   it('ignores an older response even when the transport ignores abort', async () => {

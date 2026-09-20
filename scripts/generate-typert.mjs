@@ -98,6 +98,20 @@ try {
   if (artifact.remote === undefined) {
     throw new Error(`Typert found ${String(packageModel.invocations.length)} Remote methods`)
   }
+  for (const [name, source] of [
+    ['Host', artifact.js],
+    ['Remote Client', artifact.remote.js],
+  ]) {
+    const strictCodecs = [...source.matchAll(/\bmode:\s*['"]strict['"]/gu)].length
+    const strictFactories = [
+      ...source.matchAll(/\bmode:\s*['"]strict['"],\s*\n\s*typeSymbol:[^\n]+,\s*\n\s*create:\s*/gu),
+    ].length
+    if (strictFactories !== strictCodecs) {
+      throw new Error(
+        `${name} Typert artifact has ${String(strictCodecs - strictFactories)} strict codec(s) without create() factories`,
+      )
+    }
+  }
   await mkdir(join(root, 'lib'), { recursive: true })
   await Promise.all([
     writeFile(join(root, 'lib', 'typert.host.js'), artifact.js),

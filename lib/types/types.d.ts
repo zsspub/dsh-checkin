@@ -42,6 +42,10 @@ export interface Completion {
     topicId: TopicId;
     date: string;
 }
+/** A completed day with persistence metadata included in a full backup. */
+export interface BackupCompletion extends Completion {
+    createdAt: string;
+}
 /** The actual status after an idempotent write. */
 export interface CheckinResult {
     topic: Topic;
@@ -62,7 +66,7 @@ export interface QueryResult {
     topics: Topic[];
     completions: Completion[];
 }
-/** Month read including deployment refresh policy. */
+/** One coherent month read, including deployment refresh policy. */
 export interface MonthResult extends QueryResult {
     month: string;
     refreshIntervalMs: number;
@@ -73,65 +77,37 @@ export interface TopicList {
     timeZone: string;
     topics: Topic[];
 }
-export interface ConnectionState {
-    phase: 'login' | 'setup' | 'connected' | 'invalid';
-    source: 'host' | 'saved' | 'none';
-    revision: string;
-    writable: boolean;
-    databaseId?: string;
-    tableName?: string;
-    recordsTableName?: string;
-    pendingDatabaseName?: string;
+/** Portable full-database backup. */
+export interface CheckinBackup {
+    format: 'dsh-checkin';
+    version: 2;
+    exportedAt: string;
+    topics: Topic[];
+    completions: BackupCompletion[];
 }
-export interface DatabaseResources {
-    enabled: boolean;
-    limits: {
-        maxDatabases: number;
-        maxTables: number;
-        maxBytes: number;
-    };
-    databases: {
-        id: string;
-        name: string;
-        status: 'ready' | 'provisioning' | 'deleting';
-        usedBytes: number;
-        tables: {
-            name: string;
-        }[];
-    }[];
+/** Empty request used to export a backup through the generated Remote. */
+export interface ExportDataRequest {
+    unused?: undefined;
 }
-export interface LoginRequest {
-    apiKey: string;
+/** Browser-downloadable JSON backup. */
+export interface ExportDataResult {
+    filename: string;
+    json: string;
 }
-export interface ConnectRequest {
-    databaseId: string;
-    tableName: string;
-    recordsTableName: string;
+/** JSON selected for validation and atomic incremental import. */
+export interface ImportDataRequest {
+    json: string;
 }
-export interface InitializeRequest {
-    databaseId?: string;
-    databaseName?: string;
-    tableName: string;
-    recordsTableName: string;
-    useExistingTopics?: boolean;
-    useExistingRecords?: boolean;
-    confirmed: boolean;
+/** Counts after a successful incremental import. */
+export interface ImportDataResult {
+    importedTopics: number;
+    importedCompletions: number;
+    skippedTopics: number;
 }
-export type CheckinErrorCode = 'checkin/invalid-date' | 'checkin/invalid-range' | 'checkin/invalid-name' | 'checkin/duplicate-name' | 'checkin/topic-not-found' | 'checkin/future-date' | 'checkin/invalid-config' | 'checkin/credentials-unavailable' | 'checkin/managed-connection' | 'checkin/confirmation-required' | 'checkin/connection-changed' | 'checkin/unauthorized' | 'checkin/database-conflict' | 'checkin/quota-exceeded' | 'checkin/rate-limited' | 'checkin/service-unavailable' | 'checkin/write-uncertain' | 'checkin/invalid-response' | 'checkin/invalid-data' | 'checkin/service-disabled' | 'checkin/database-not-found' | 'checkin/database-not-ready' | 'checkin/table-not-found' | 'checkin/inconsistent-read' | 'checkin/invalid-schema' | 'checkin/query-rejected' | 'checkin/api-unavailable' | 'checkin/request-too-large' | 'checkin/concurrent-change';
+/** Stable domain failure codes transported without exposing SQLite internals. */
+export type CheckinErrorCode = 'checkin/invalid-date' | 'checkin/invalid-range' | 'checkin/invalid-name' | 'checkin/duplicate-name' | 'checkin/topic-not-found' | 'checkin/future-date' | 'checkin/invalid-config' | 'checkin/newer-schema' | 'checkin/invalid-backup' | 'checkin/backup-too-large' | 'checkin/import-conflict';
 declare module '@deepseek-ai/dsh-typert-protocol' {
     interface RemoteErrorDetailsMap {
-        'checkin/credentials-unavailable': {
-            readonly retryable?: boolean;
-        };
-        'checkin/managed-connection': {
-            readonly retryable?: boolean;
-        };
-        'checkin/confirmation-required': {
-            readonly retryable?: boolean;
-        };
-        'checkin/connection-changed': {
-            readonly retryable?: boolean;
-        };
         'checkin/invalid-date': {
             readonly retryable?: boolean;
         };
@@ -153,58 +129,16 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
         'checkin/invalid-config': {
             readonly retryable?: boolean;
         };
-        'checkin/unauthorized': {
+        'checkin/newer-schema': {
             readonly retryable?: boolean;
         };
-        'checkin/database-conflict': {
+        'checkin/invalid-backup': {
             readonly retryable?: boolean;
         };
-        'checkin/quota-exceeded': {
+        'checkin/backup-too-large': {
             readonly retryable?: boolean;
         };
-        'checkin/rate-limited': {
-            readonly retryable?: boolean;
-        };
-        'checkin/service-unavailable': {
-            readonly retryable?: boolean;
-        };
-        'checkin/write-uncertain': {
-            readonly retryable?: boolean;
-        };
-        'checkin/invalid-response': {
-            readonly retryable?: boolean;
-        };
-        'checkin/invalid-data': {
-            readonly retryable?: boolean;
-        };
-        'checkin/service-disabled': {
-            readonly retryable?: boolean;
-        };
-        'checkin/database-not-found': {
-            readonly retryable?: boolean;
-        };
-        'checkin/database-not-ready': {
-            readonly retryable?: boolean;
-        };
-        'checkin/table-not-found': {
-            readonly retryable?: boolean;
-        };
-        'checkin/inconsistent-read': {
-            readonly retryable?: boolean;
-        };
-        'checkin/invalid-schema': {
-            readonly retryable?: boolean;
-        };
-        'checkin/query-rejected': {
-            readonly retryable?: boolean;
-        };
-        'checkin/api-unavailable': {
-            readonly retryable?: boolean;
-        };
-        'checkin/request-too-large': {
-            readonly retryable?: boolean;
-        };
-        'checkin/concurrent-change': {
+        'checkin/import-conflict': {
             readonly retryable?: boolean;
         };
     }

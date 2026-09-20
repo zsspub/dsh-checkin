@@ -3,36 +3,28 @@ import type {
   RemoteResult,
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { CheckinResult, ConnectionState, ConnectRequest, CreateTopic, DatabaseResources, DeleteResult, InitializeRequest, LoginRequest, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicList, TopicRequest, UpdateTopic } from 'dsh-checkin/types'
+import type { CheckinResult, CreateTopic, DeleteResult, ExportDataRequest, ExportDataResult, ImportDataRequest, ImportDataResult, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicList, TopicRequest, UpdateTopic } from 'dsh-checkin/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$636865636b696e {
-    connect: (request: ConnectRequest, signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
-    connection: (signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
     create: (request: CreateTopic, signal?: AbortSignal) => Promise<RemoteResult<Topic>>
     delete: (request: TopicRequest, signal?: AbortSignal) => Promise<RemoteResult<DeleteResult>>
-    initialize: (request: InitializeRequest, signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
+    exportData: (_request: ExportDataRequest, signal?: AbortSignal) => Promise<RemoteResult<ExportDataResult>>
+    importData: (request: ImportDataRequest, signal?: AbortSignal) => Promise<RemoteResult<ImportDataResult>>
     list: (signal?: AbortSignal) => Promise<RemoteResult<TopicList>>
-    login: (request: LoginRequest, signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
-    logout: (signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
     month: (request: MonthRequest, signal?: AbortSignal) => Promise<RemoteResult<MonthResult>>
     query: (request: QueryCheckins, signal?: AbortSignal) => Promise<RemoteResult<QueryResult>>
-    resources: (signal?: AbortSignal) => Promise<RemoteResult<DatabaseResources>>
     set: (request: SetCheckin, signal?: AbortSignal) => Promise<RemoteResult<CheckinResult>>
     update: (request: UpdateTopic, signal?: AbortSignal) => Promise<RemoteResult<Topic>>
   }
   interface TypertRemoteMap {
-    'checkin/connect': (request: ConnectRequest, signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
-    'checkin/connection': (signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
     'checkin/create': (request: CreateTopic, signal?: AbortSignal) => Promise<RemoteResult<Topic>>
     'checkin/delete': (request: TopicRequest, signal?: AbortSignal) => Promise<RemoteResult<DeleteResult>>
-    'checkin/initialize': (request: InitializeRequest, signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
+    'checkin/exportData': (_request: ExportDataRequest, signal?: AbortSignal) => Promise<RemoteResult<ExportDataResult>>
+    'checkin/importData': (request: ImportDataRequest, signal?: AbortSignal) => Promise<RemoteResult<ImportDataResult>>
     'checkin/list': (signal?: AbortSignal) => Promise<RemoteResult<TopicList>>
-    'checkin/login': (request: LoginRequest, signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
-    'checkin/logout': (signal?: AbortSignal) => Promise<RemoteResult<ConnectionState>>
     'checkin/month': (request: MonthRequest, signal?: AbortSignal) => Promise<RemoteResult<MonthResult>>
     'checkin/query': (request: QueryCheckins, signal?: AbortSignal) => Promise<RemoteResult<QueryResult>>
-    'checkin/resources': (signal?: AbortSignal) => Promise<RemoteResult<DatabaseResources>>
     'checkin/set': (request: SetCheckin, signal?: AbortSignal) => Promise<RemoteResult<CheckinResult>>
     'checkin/update': (request: UpdateTopic, signal?: AbortSignal) => Promise<RemoteResult<Topic>>
   }
