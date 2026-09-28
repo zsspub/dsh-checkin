@@ -6,7 +6,7 @@
 
 ## 安装
 
-需要 DSH `0.1.5-rc.1` 和 Node.js `^22.19.0 || >=24.0.0`。可从仓库安装；正式环境建议固定到已验证的提交：
+需要 DSH `0.1.7-rc.2` 和 Node.js `^22.19.0 || >=24.0.0`。可从仓库安装；正式环境建议固定到已验证的提交：
 
 ```sh
 dsh plugin --profile web add github:zsspub/dsh-checkin

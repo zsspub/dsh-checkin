@@ -6,7 +6,7 @@ Daily check-in topics for DeepSeek Harness, with model tools and a Host-native r
 
 ## Install
 
-Requires DSH `0.1.5-rc.1` and Node.js `^22.19.0 || >=24.0.0`. Install from the repository, then restart the profile and refresh its browser; pin a verified commit for reproducible deployments:
+Requires DSH `0.1.7-rc.2` and Node.js `^22.19.0 || >=24.0.0`. Install from the repository, then restart the profile and refresh its browser; pin a verified commit for reproducible deployments:
 
 ```sh
 dsh plugin --profile web add github:zsspub/dsh-checkin
