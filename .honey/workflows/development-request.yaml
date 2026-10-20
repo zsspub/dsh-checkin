@@ -1,0 +1,19 @@
+schemaVersion: 1
+name: 开发需求确认
+description: 仅登记开发需求并等待用户确认，尚未配置开发代理或代码执行命令。
+inputSchema:
+  type: object
+  additionalProperties: false
+  required: [goal]
+  properties:
+    goal:
+      type: string
+      minLength: 1
+      title: 开发目标
+nodes:
+  confirm-goal:
+    title: 确认开发目标
+    uses: approval
+    input:
+      title: 确认开发目标
+      content: "${{ inputs.goal }}"
