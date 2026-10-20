@@ -95,7 +95,7 @@ try {
   const packageModel = face?.packages.find(candidate => candidate.name === 'dsh-checkin')
   if (face === undefined || packageModel === undefined) throw new Error('Typert found no Host package model')
   const artifact = new FaceModelEmitter(face).emit('dsh-checkin')
-  if (artifact.remote === undefined) {
+  if (packageModel.invocations.length === 0 || artifact.remote === undefined) {
     throw new Error(`Typert found ${String(packageModel.invocations.length)} Remote methods`)
   }
   for (const [name, source] of [
@@ -106,6 +106,7 @@ try {
     const strictFactories = [
       ...source.matchAll(/\bmode:\s*['"]strict['"],\s*\n\s*typeSymbol:[^\n]+,\s*\n\s*create:\s*/gu),
     ].length
+    if (strictCodecs === 0) throw new Error(`${name} Typert artifact has no strict codecs`)
     if (strictFactories !== strictCodecs) {
       throw new Error(
         `${name} Typert artifact has ${String(strictCodecs - strictFactories)} strict codec(s) without create() factories`,
