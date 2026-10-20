@@ -1,0 +1,400 @@
+schemaVersion: 1
+name: dsh-checkin 并行开发到 main
+description: 需求录入与确认、独立 worktree 开发、串行集成验证及两轮冲突修复；发布 GitHub PR 后等待人工合并，核对提交与文件树后安全同步并清理。
+inputSchema:
+  type: object
+  additionalProperties: false
+nodes:
+  requirement:
+    title: 需求录入
+    uses: requirement
+    presentation:
+      - type: honey-markdown
+        content: ${{ output.markdown }}
+      - type: honey-signal-form
+        fields:
+          markdown: markdown
+  intent-agent:
+    title: 需求意图理解
+    uses: codex
+    needs:
+      - requirement
+    timeoutMs: 600000
+    input:
+      collaborationMode: default
+      sandbox: read-only
+      prompt: |
+        请用中文、以你自己的理解复述用户想要完成的需求，供用户确认你是否理解准确。
+        说明用户的目标、要改变的行为、范围边界和预期结果；严格区分原文明确的信息与尚不确定的信息，不擅自扩展需求。
+        尽量简短，用一小段或少量要点说清即可，避免长篇大论；只有需求规模确实较大时才适当展开。
+        用户需求原文：
+        ${{ nodes.requirement.output.markdown }}
+      outputSchema:
+        type: object
+        additionalProperties: false
+        required:
+          - understanding
+        properties:
+          understanding:
+            type: string
+            minLength: 1
+    presentation:
+      - type: honey-message-stream
+      - type: honey-markdown
+        content: ${{ output.understanding }}
+  requirement-confirm:
+    title: 需求意图确认
+    uses: approval
+    needs:
+      - intent-agent
+    input:
+      title: 确认需求意图
+      content: ${{ nodes.intent-agent.output.understanding }}
+      inputSchema:
+        type: object
+        additionalProperties: false
+        required:
+          - approved
+        properties:
+          approved:
+            type: boolean
+            title: 确认需求意图
+          reason:
+            type: string
+            title: 拒绝原因
+        x-honey-actions:
+          - label: 确认需求意图
+            values:
+              approved: true
+          - label: 拒绝
+            values:
+              approved: false
+            requiredFields:
+              - reason
+    presentation:
+      - type: honey-markdown
+        content: ${{ signal.description }}
+      - type: honey-signal-form
+        fields:
+          reason: textarea
+  create-worktree:
+    title: 准备工作区
+    uses: worktree
+    needs:
+      - requirement-confirm
+    input:
+      action: create
+      baseBranch: main
+      remote: origin
+      worktreeRoot: .honey/worktrees
+  clarify-agent:
+    title: Agent 需求澄清
+    uses: codex
+    needs:
+      - create-worktree
+    timeoutMs: 1800000
+    input:
+      collaborationMode: plan
+      sandbox: read-only
+      cwd: ${{ nodes.create-worktree.output.result.path }}
+      prompt: |
+        请基于用户需求原文及用户已确认的需求意图理解，检查代码并澄清实现所必需的信息，生成可执行的 Markdown 实施计划。
+        如有影响实现的未决问题，使用 request_user_input 向用户澄清；不要擅自添加需求。
+        信息充分后返回 JSON，plan 字段为完整计划，包含实现步骤和验证方式；不要再请求用户确认计划，也不要在本阶段修改文件。
+        用户需求原文：
+        ${{ nodes.requirement.output.markdown }}
+        用户已确认的需求意图理解：
+        ${{ nodes.intent-agent.output.understanding }}
+      outputSchema:
+        type: object
+        additionalProperties: false
+        required:
+          - plan
+        properties:
+          plan:
+            type: string
+            minLength: 1
+    presentation:
+      - type: honey-message-stream
+      - type: honey-signal-form
+      - type: honey-markdown
+        content: ${{ output.plan }}
+  coding:
+    title: 开发实现
+    uses: codex
+    presentation:
+      - type: honey-message-stream
+    needs:
+      - clarify-agent
+    timeoutMs: 3600000
+    input:
+      resume: ${{ nodes.clarify-agent.output.sessionId }}
+      collaborationMode: default
+      sandbox: workspace-write
+      cwd: ${{ nodes.create-worktree.output.result.path }}
+      prompt: |-
+        使用中文。按本会话刚才生成的计划完成编码和必要验证，无需再次确认计划。
+        遵守当前目录适用的 AGENTS.md，只实现需求范围内的改动，保留已有修改；不得删除或弱化验证。
+        本阶段不要提交、推送、创建 PR、合并 main 或清理 worktree。后续节点负责提交、串行集成和完整验证。
+  commit:
+    title: 提交需求分支
+    uses: github
+    needs:
+      - coding
+    input:
+      operation: development
+      action: commit
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+      title: ${{ nodes.requirement.output.title }}
+      plan: ${{ nodes.clarify-agent.output.plan }}
+      acceptanceText: ${{ nodes.requirement.output.acceptanceText }}
+    timeoutMs: 120000
+  integrate:
+    title: 排队集成、验证并发布 GitHub PR
+    uses: github
+    needs:
+      - commit
+    input:
+      operation: development
+      action: integrate-auto
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+    timeoutMs: 7200000
+    presentation:
+      - type: honey-markdown
+        content: ${{ output.result.message }}
+  prepare-conflict:
+    title: 准备冲突修复
+    uses: github
+    needs:
+      - integrate
+      - confirm-merge
+    input:
+      operation: development
+      action: prepare-repair
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+      reworkCount: ${{ run.rework.by.assess-conflict.count }}
+    timeoutMs: 120000
+  resolve-conflict:
+    title: Agent 解决冲突
+    uses: codex
+    needs:
+      - prepare-conflict
+    when: ${{ nodes.prepare-conflict.output.result.autoRepair }}
+    continueOnError: true
+    timeoutMs: 1800000
+    input:
+      resume: ${{ nodes.coding.output.sessionId }}
+      collaborationMode: default
+      sandbox: workspace-write
+      cwd: ${{ nodes.create-worktree.output.result.path }}
+      prompt: |
+        使用中文。你正在原需求 worktree 解决与 origin/main 的集成冲突，当前已释放合并锁，其他需求可能继续推进 main。
+        遵守 AGENTS.md，检查 Git 状态；流程已在此 worktree 合并目标 origin/main，保留了未解决的冲突。
+        理解双方改动并保留两边的需求意图，解决冲突后只保存文件，不操作 Git 索引或提交；后续 GitHub 插件会核对目标并提交当前 merge。
+        禁止重写历史、reset、checkout --ours/--theirs 批量丢弃一边、修改源仓库 main、推送或清理任何 worktree。
+        不得删除或弱化测试。最终的完整验证由后续串行集成节点执行。
+        需求存在歧义、无法安全兼容双方改动或无法安全修复时，保留当前现场，返回 resolved: false，并在 summary 中说明阻塞原因与需要用户决定的问题。
+        成功必须已解决所有冲突并保存文件；不要提交或扩大沙箱权限，返回 resolved: true 与修复摘要。
+        目标 main 提交：${{ nodes.prepare-conflict.output.result.targetMainSha }}
+        冲突信息：${{ nodes.prepare-conflict.output.result.message }}
+        上次修复校验反馈：${{ run.rework.by.assess-conflict.feedback }}
+        需求原文：
+        ${{ nodes.requirement.output.markdown }}
+        原实施计划：
+        ${{ nodes.clarify-agent.output.plan }}
+      outputSchema:
+        type: object
+        additionalProperties: false
+        required:
+          - resolved
+          - summary
+        properties:
+          resolved:
+            type: boolean
+          summary:
+            type: string
+            minLength: 1
+    presentation:
+      - type: honey-message-stream
+      - type: honey-markdown
+        content: ${{ output.summary }}
+  assess-conflict:
+    title: 校验冲突修复结果
+    uses: github
+    needs:
+      - commit-repair
+    input:
+      operation: development
+      action: assess-repair
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+      reworkCount: ${{ run.rework.by.assess-conflict.count }}
+      agentResolved: ${{ nodes.resolve-conflict.output.resolved }}
+      agentSummary: ${{ nodes.resolve-conflict.output.summary }}
+    rework:
+      from: resolve-conflict
+      when: ${{ nodes.assess-conflict.output.result.retryAgent }}
+      feedback: ${{ nodes.assess-conflict.output.result.feedback }}
+      maxReworks: 1
+  conflict-handoff:
+    title: 需要人工解决冲突
+    uses: approval
+    needs:
+      - assess-conflict
+    when: ${{ nodes.assess-conflict.output.result.needsHuman }}
+    input:
+      title: 自动修复未完成，请处理需求 worktree
+      content: ${{ nodes.assess-conflict.output.result.message }}
+      inputSchema:
+        type: object
+        additionalProperties: false
+        required:
+          - approved
+        properties:
+          approved:
+            type: boolean
+          reason:
+            type: string
+            title: 处理说明
+        x-honey-actions:
+          - label: 已修复并提交，重新排队
+            values:
+              approved: true
+          - label: 停止并保留现场
+            values:
+              approved: false
+    presentation:
+      - type: honey-markdown
+        content: ${{ signal.description }}
+      - type: honey-signal-form
+        fields:
+          reason: textarea
+  repair-gate:
+    title: 冲突修复后重新排队
+    uses: github
+    needs:
+      - conflict-handoff
+    input:
+      operation: development
+      action: repair-gate
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+      humanRepairApproved: ${{ nodes.conflict-handoff.output.approved }}
+    rework:
+      from: integrate
+      when: ${{ nodes.repair-gate.output.result.requeue }}
+      feedback: ${{ nodes.repair-gate.output.result.feedback }}
+      maxReworks: 100
+  sync-main:
+    title: 安全同步本地 main
+    uses: github
+    needs:
+      - repair-gate
+    input:
+      operation: development
+      action: sync-main
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+    timeoutMs: 7200000
+    presentation:
+      - type: honey-markdown
+        content: ${{ output.result.message }}
+  cleanup-integration:
+    title: 清理成功集成工作区
+    uses: github
+    needs:
+      - sync-main
+    input:
+      operation: development
+      action: cleanup
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+  remove-worktree:
+    title: 清理工作区
+    uses: worktree
+    needs:
+      - create-worktree
+      - cleanup-integration
+    runIf: success
+    input:
+      action: remove
+      path: ${{ nodes.create-worktree.output.result.path }}
+  merge-handoff:
+    title: 确认 GitHub PR 已人工合入
+    uses: approval
+    needs:
+      - integrate
+    when: ${{ nodes.integrate.output.result.manualMerge }}
+    input:
+      title: 请完成 GitHub 评审和 merge commit 合入后确认
+      content: ${{ nodes.integrate.output.result.message }}
+      inputSchema:
+        type: object
+        additionalProperties: false
+        required:
+          - approved
+        properties:
+          approved:
+            type: boolean
+            title: 已在 GitHub 合入
+          reason:
+            type: string
+            title: 说明
+        x-honey-actions:
+          - label: 已完成合入，核验结果
+            values:
+              approved: true
+          - label: 停止并保留现场
+            values:
+              approved: false
+    presentation:
+      - type: honey-markdown
+        content: ${{ signal.description }}
+      - type: honey-signal-form
+        fields:
+          reason: textarea
+  confirm-merge:
+    title: 核验 GitHub 合入提交和文件树
+    uses: github
+    needs:
+      - merge-handoff
+    when: ${{ nodes.integrate.output.result.manualMerge }}
+    input:
+      operation: development
+      action: confirm-merge
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+      humanMergeApproved: ${{ nodes.merge-handoff.output.approved }}
+    timeoutMs: 120000
+  commit-repair:
+    title: 提交已确认的冲突修复
+    uses: github
+    needs:
+      - resolve-conflict
+    when: ${{ nodes.prepare-conflict.output.result.autoRepair }}
+    input:
+      operation: development
+      action: commit-repair
+      approved: ${{ nodes.requirement-confirm.output.approved }}
+      devPath: ${{ nodes.create-worktree.output.result.path }}
+      baseSha: ${{ nodes.create-worktree.output.result.baseSha }}
+      agentResolved: ${{ nodes.resolve-conflict.output.resolved }}
+outputs:
+  branch: ${{ nodes.create-worktree.output.result.branch }}
+  commit: ${{ nodes.commit.output.result.sha }}
+  mergedSha: ${{ nodes.sync-main.output.result.mergedSha }}
+  verifyLog: ${{ nodes.integrate.output.result.verifyLog }}
+  receiptFile: ${{ nodes.integrate.output.result.receiptFile }}
+  localMainSha: ${{ nodes.sync-main.output.result.sha }}
+  prUrl: ${{ nodes.integrate.output.result.url }}

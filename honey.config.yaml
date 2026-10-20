@@ -1,0 +1,37 @@
+schemaVersion: 2
+engine:
+  requires: ">=5.0.0 <6"
+workspace:
+  key: dsh-checkin
+  name: dsh-checkin
+plugins:
+  worktree:
+    use: "@aimefe-honey/plugin-worktree@5.0.0"
+  codex:
+    use: "@aimefe-honey/plugin-codex@5.0.0"
+    config:
+      model: gpt-6.1-sol
+      reasoningEffort: high
+  requirement:
+    use: "@aimefe-honey/plugin-requirement@5.0.0"
+  approval:
+    use: "@aimefe-honey/plugin-approval@5.0.0"
+  github:
+    use: "@aimefe-honey/plugin-github@5.0.0"
+    config:
+      repo: zsspub/dsh-checkin
+      baseBranch: main
+      remote: origin
+      verifyCommands:
+        - - pnpm
+          - install
+          - --frozen-lockfile
+        - - pnpm
+          - run
+          - check
+workflows:
+  default: development
+  definitions:
+    development: .honey/workflows/development.yaml
+execution:
+  maxParallelNodes: 4

@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 .verification/
 .playwright-mcp/
+.honey/worktrees/
 .env*
 *.sqlite*
 *.db*
