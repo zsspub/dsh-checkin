@@ -6,7 +6,7 @@
 
 ## 安装
 
-目标版本为 DSH `0.2.1-rc.2`，需要 Node.js `^22.19.0 || >=24.0.0`。可从仓库安装；正式环境建议固定到已验证的提交：
+目标版本为本机已安装的 DSH `0.2.1-rc.3`，需要 Node.js `^22.19.0 || >=24.0.0`。可从仓库安装；正式环境建议固定到已验证的提交：
 
 ```sh
 dsh plugin --profile web add github:zsspub/dsh-checkin
@@ -14,7 +14,7 @@ dsh plugin --profile web add github:zsspub/dsh-checkin
 
 安装后重启该 DSH profile，并刷新页面。Git 仓库包含编译产物，安装时不需要编译插件。也可以安装 `pnpm pack` 生成的 tarball。
 
-macOS 桌面端须先完全退出应用，再使用应用自带 CLI 安装。参见[兼容性证据、desktop 安装与回滚步骤](docs/desktop-0.2.1-rc.2.md)。本次自动化检查和隔离 tarball Host 冒烟通过；真实 desktop profile 安装及原生界面验收仍待完成。
+macOS 桌面端须先完全退出应用，再使用应用自带 CLI 安装。参见[本机版本兼容性与验证边界](docs/desktop-0.2.1-rc.3.md)。本次自动化检查通过；未安装到 desktop profile，原生界面仍待验收。
 
 ## 对话打卡
 
@@ -56,7 +56,7 @@ Tab 可见且页面可见时默认每 3 秒刷新；手动写入后立即读取�
 ## 开发与验证
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 pnpm run check
 ```
 

@@ -6,7 +6,7 @@ Daily check-in topics for DeepSeek Harness, with model tools and a Host-native r
 
 ## Install
 
-Targets DSH `0.2.1-rc.2` and Node.js `^22.19.0 || >=24.0.0`. Install from the repository, then restart the profile and refresh its browser; pin a verified commit for reproducible deployments:
+Targets the locally installed DSH `0.2.1-rc.3` and Node.js `^22.19.0 || >=24.0.0`. Install from the repository, then restart the profile and refresh its browser; pin a verified commit for reproducible deployments:
 
 ```sh
 dsh plugin --profile web add github:zsspub/dsh-checkin
@@ -14,7 +14,7 @@ dsh plugin --profile web add github:zsspub/dsh-checkin
 
 Built artifacts are committed; installation needs no lifecycle build. A tarball from `pnpm pack` is also supported.
 
-For the macOS Desktop profile, use the application-bundled CLI after fully quitting the app. See the [compatibility evidence and Desktop installation/rollback steps](docs/desktop-0.2.1-rc.2.md). Automated checks and an isolated tarball Host smoke test pass; installation into the real Desktop profile and native UI acceptance remain pending.
+For the macOS Desktop profile, use the application-bundled CLI after fully quitting the app. See the [local-version compatibility evidence and verification limits](docs/desktop-0.2.1-rc.3.md). Automated checks pass; installation into the real Desktop profile and native UI acceptance remain pending.
 
 ## Use
 
@@ -56,7 +56,7 @@ The typed `checkin` Remote namespace exposes `list/create/update/delete/set/quer
 ## Development
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 pnpm run check
 ```
 
