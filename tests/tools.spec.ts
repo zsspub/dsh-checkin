@@ -45,3 +45,35 @@ it('exposes cancellation and typed business failures over the Host API', async (
   expect((await ctx.checkin.list(new AbortController().signal)).topics).toHaveLength(0)
   await expect(ctx.checkin.create({ name: '' }, new AbortController().signal)).rejects.toMatchObject({ code: 'checkin/invalid-name' })
 })
+it('computes compact and series-inclusive check-in stats via checkin_stats tool', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'checkin-stats-tool-')); dirs.push(dir)
+  const ctx = new Context(); contexts.push(ctx)
+  await ctx.plugin(CheckinService, { databasePath: join(dir, 'db.sqlite'), busyTimeoutMs: 1000, refreshIntervalMs: 3000 })
+  const tools = new Map<string, ToolDefinition>(), disposers: (() => void)[] = []
+  apply({ checkin: ctx.checkin, effect: (setup: () => () => void) => { disposers.push(setup()) }, tools: { register: (tool: ToolDefinition) => { tools.set(tool.name, tool); return () => { tools.delete(tool.name) } } } } as unknown as Context)
+  expect(tools.size).toBe(7)
+  const signal = new AbortController().signal
+  const run: ToolRunContext = { signal, concludeTurn() {}, deferContext() {}, callId: 'stats-test' as ToolRunContext['callId'], rootCallId: 'stats-test' as ToolRunContext['rootCallId'], token: {} as ToolRunContext['token'], name: 'stats-test', arguments: {} }
+  const read = await ctx.checkin.create({ name: '阅读' }, signal)
+  await ctx.checkin.set({ topicId: read.id, date: '2024-02-28', completed: true }, signal)
+  await ctx.checkin.set({ topicId: read.id, date: '2024-02-29', completed: true }, signal)
+
+  const tool = tools.get('checkin_stats')!
+  const compact = await tool.execute({ preset: 'month', month: '2024-02' }, run) as Record<string, unknown>
+  expect(compact.preset).toBe('month')
+  expect(compact.month).toBe('2024-02')
+  expect(compact.from).toBe('2024-02-01')
+  expect(compact.to).toBe('2024-02-29')
+  expect(compact.summary).toMatchObject({ completedCheckins: 2, possibleCheckins: 29, elapsedDays: 29, longestStreak: 2 })
+  expect(compact.heatmap).toBeUndefined()
+  expect(compact.trend).toBeUndefined()
+
+  const detailed = await tool.execute({ preset: 'month', month: '2024-02', topicId: read.id, includeSeries: true }, run) as Record<string, unknown>
+  expect(detailed.heatmapGranularity).toBe('day')
+  expect(Array.isArray(detailed.heatmap)).toBe(true)
+  expect((detailed.heatmap as unknown[]).length).toBe(29)
+  expect(Array.isArray(detailed.trend)).toBe(true)
+
+  for (const dispose of disposers) dispose()
+  expect(tools.size).toBe(0)
+})

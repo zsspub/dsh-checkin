@@ -30,6 +30,116 @@ export interface QueryResult { today: string; timeZone: string; from: string; to
 export interface MonthResult extends QueryResult { month: string; refreshIntervalMs: number }
 /** Topic discovery and authoritative Host date. */
 export interface TopicList { today: string; timeZone: string; topics: Topic[] }
+/** Supported statistics window presets. */
+export type StatsPreset = '7d' | '30d' | '90d' | 'month' | 'all'
+/** Current streak state relative to today in Asia/Shanghai. */
+export type StreakStatus = 'done_today' | 'pending_today' | 'broken'
+/** Heatmap cell granularity for the selected window. */
+export type HeatmapGranularity = 'day' | 'month'
+/** Request payload for Host-computed statistics. */
+export interface StatsRequest {
+  preset?: StatsPreset
+  month?: string
+  topicId?: TopicId
+  ifNoneMatch?: string
+}
+/** Period-over-period comparison; null when no prior history exists or on all-time. */
+export interface StatsComparison {
+  from: string
+  to: string
+  elapsedDays: number
+  completedCheckins: number
+  possibleCheckins: number
+  completionRate: number | null
+  rateDeltaPp: number | null
+}
+/** Top-level aggregate metrics scoped to the active window and topic selection. */
+export interface StatsSummary {
+  topicCount: number
+  todayDoneCount: number
+  todayTotalCount: number
+  elapsedDays: number | null
+  completedCheckins: number
+  possibleCheckins: number | null
+  completionRate: number | null
+  activeDays: number
+  perfectDays: number
+  longestStreak: number
+  longestStreakTopicId: TopicId | null
+  longestStreakTopicName: string | null
+  longestStreakFrom: string | null
+  longestStreakTo: string | null
+  firstCompletedDate: string | null
+  lastCompletedDate: string | null
+  comparison: StatsComparison | null
+}
+/** Per-topic breakdown with full-history streaks and active-window counts. */
+export interface TopicStat {
+  topic: Topic
+  windowCount: number
+  windowRate: number | null
+  allTimeCount: number
+  completedToday: boolean
+  currentStreak: number
+  streakStatus: StreakStatus
+  longestStreak: number
+  longestStreakFrom: string | null
+  longestStreakTo: string | null
+  firstCompletedDate: string | null
+  lastCompletedDate: string | null
+}
+/** One heatmap cell (day in 7d/30d/month/90d; month in all-time). */
+export interface HeatmapCell {
+  key: string
+  slot: number
+  completed: number
+  possible: number
+  level: number
+  future: boolean
+}
+/** One adaptive trend point (capped at 10 points for narrow-pane readability). */
+export interface TrendBucket {
+  key: string
+  from: string
+  to: string
+  elapsedDays: number
+  completed: number
+  possible: number
+  rate: number
+}
+/** Monday-first (0..6) weekday aggregation. */
+export interface WeekdayStat {
+  weekday: number
+  occurrences: number
+  completed: number
+  possible: number
+  rate: number | null
+}
+/** Complete computed statistics snapshot. */
+export interface StatsSnapshot {
+  preset: StatsPreset
+  month: string | null
+  from: string
+  to: string
+  effectiveTo: string | null
+  topicId: TopicId | null
+  catalog: Topic[]
+  summary: StatsSummary
+  topics: TopicStat[]
+  heatmapGranularity: HeatmapGranularity
+  heatmap: HeatmapCell[]
+  trend: TrendBucket[]
+  weekdays: WeekdayStat[]
+}
+/** Wire response supporting O(1) unchanged polling hits. */
+export interface StatsResult {
+  today: string
+  timeZone: string
+  refreshIntervalMs: number
+  revision: string
+  unchanged: boolean
+  snapshot: StatsSnapshot | null
+}
 /** Portable full-database backup. */
 export interface CheckinBackup {
   format: 'dsh-checkin'

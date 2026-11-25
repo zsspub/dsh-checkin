@@ -2,7 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import Schema from '@deepseek-ai/schemastery';
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
-import type { CheckinResult, CreateTopic, DeleteResult, ExportDataRequest, ExportDataResult, ImportDataRequest, ImportDataResult, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicList, TopicRequest, UpdateTopic } from './types.ts';
+import type { CheckinResult, CreateTopic, DeleteResult, ExportDataRequest, ExportDataResult, ImportDataRequest, ImportDataResult, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, StatsRequest, StatsResult, Topic, TopicList, TopicRequest, UpdateTopic } from './types.ts';
 export type * from './types.ts';
 /** Deployment-owned storage and refresh settings. */
 export interface Config {
@@ -36,6 +36,8 @@ export declare class CheckinService extends TypertRemoteService {
     query(request: QueryCheckins, signal: AbortSignal): Promise<QueryResult>;
     /** @param request - Month, defaulting to Beijing's current month. @param signal - Cancellation. @returns Calendar snapshot. */
     month(request: MonthRequest, signal: AbortSignal): Promise<MonthResult>;
+    /** @param request - Statistics window, optional topic filter, and conditional revision watermark. @param signal - Cancellation. @returns Aggregated check-in statistics or O(1) unchanged hit. */
+    stats(request: StatsRequest, signal: AbortSignal): Promise<StatsResult>;
     /** @param _request - Empty request. @param signal - Cancellation. @returns Portable JSON backup. */
     exportData(_request: ExportDataRequest, signal: AbortSignal): Promise<ExportDataResult>;
     /** @param request - Confirmed backup. @param signal - Cancellation. @returns Incremental import counts. */

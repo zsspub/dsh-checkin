@@ -5,11 +5,12 @@ import { dirname, isAbsolute } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { assertBackupSize, parseCheckinBackup } from '../backup.ts'
+import { computeCheckinStats, isStatsPreset, isValidDate, monthBounds } from '../stats.ts'
 import type { CheckinErrorCode } from '../types.ts'
 function failure(code: CheckinErrorCode): RemoteError<CheckinErrorCode> { return new RemoteError(code, code, {}) }
 import type {
   BackupCompletion, CheckinBackup, CheckinResult, Completion, DeleteResult, ExportDataResult, ImportDataResult,
-  QueryCheckins, QueryResult, SetCheckin, Topic, TopicId, TopicList,
+  QueryCheckins, QueryResult, SetCheckin, StatsPreset, StatsRequest, StatsResult, Topic, TopicId, TopicList,
 } from '../types.ts'
 
 /** Current SQLite schema; newer databases are refused without modification. */
@@ -26,17 +27,14 @@ export function todayInBeijing(now = new Date()): string {
  * @param date - Calendar date. @returns Validated date.
  */
 export function validDate(date: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(date) || date < '0001-01-01' || !Number.isFinite(Date.parse(`${date}T00:00:00Z`)) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date) throw failure('checkin/invalid-date')
+  if (!isValidDate(date)) throw failure('checkin/invalid-date')
   return date
 }
 /** Resolve an inclusive month range without using the local machine time zone.
  * @param month - YYYY-MM month. @returns First and last calendar date.
  */
 export function monthRange(month: string): { from: string; to: string } {
-  const from = validDate(`${month}-01`)
-  const end = new Date(`${from}T00:00:00Z`)
-  end.setUTCMonth(end.getUTCMonth() + 1, 0)
-  return { from, to: end.toISOString().slice(0, 10) }
+  try { return monthBounds(month) } catch { throw failure('checkin/invalid-date') }
 }
 function validName(value: string): string {
   const name = value.trim()
@@ -75,6 +73,8 @@ function createSchema(db: DatabaseSync): void {
 /** One connection, prepared writes, and atomic catalog/record snapshots. */
 export class CheckinStore {
   private readonly db: DatabaseSync
+  private readonly storeEpoch = randomUUID().slice(0, 8)
+  private mutationSeq = 0
   /** @param config - Absolute path and lock timeout. @param now - Clock used by date-sensitive operations. */
   constructor(config: StoreConfig, private readonly now: () => Date = () => new Date()) {
     if (!isAbsolute(config.databasePath) || !Number.isSafeInteger(config.busyTimeoutMs) || config.busyTimeoutMs < 1) throw failure('checkin/invalid-config')
@@ -107,6 +107,11 @@ export class CheckinStore {
   }
   private transaction<T>(run: () => T): T {
     this.db.exec('BEGIN IMMEDIATE')
+    try { const result = run(); this.db.exec('COMMIT'); this.mutationSeq += 1; return result }
+    catch (error) { this.db.exec('ROLLBACK'); throw error }
+  }
+  private readTransaction<T>(run: () => T): T {
+    this.db.exec('BEGIN')
     try { const result = run(); this.db.exec('COMMIT'); return result }
     catch (error) { this.db.exec('ROLLBACK'); throw error }
   }
@@ -166,7 +171,7 @@ export class CheckinStore {
   query(request: QueryCheckins): QueryResult {
     const from = validDate(request.from), to = validDate(request.to)
     if (from > to) throw failure('checkin/invalid-range')
-    return this.transaction(() => {
+    return this.readTransaction(() => {
       const list = this.list()
       const topics = request.topicId === undefined ? list.topics : [this.topic(request.topicId)]
       const completions = (request.topicId === undefined
@@ -175,9 +180,41 @@ export class CheckinStore {
       return { ...list, from, to, topics, completions }
     })
   }
+  /** @param request - Window preset, optional month/topic filter, and revision watermark. @returns Computed stats or O(1) unchanged hit. */
+  stats(request: StatsRequest): Omit<StatsResult, 'refreshIntervalMs'> {
+    if (request.preset !== undefined && !isStatsPreset(request.preset)) throw failure('checkin/invalid-range')
+    const preset: StatsPreset = request.preset ?? (request.month !== undefined ? 'month' : '30d')
+    return this.readTransaction(() => {
+      const today = todayInBeijing(this.now())
+      const resolvedMonth = preset === 'month' ? (request.month ?? today.slice(0, 7)) : undefined
+      if (resolvedMonth !== undefined) monthRange(resolvedMonth)
+      const dataVersion = Number(this.db.prepare('PRAGMA data_version').get()?.data_version ?? 0)
+      const queryFingerprint = `${preset}:${resolvedMonth ?? ''}:${request.topicId ?? ''}`
+      const revision = `${today}:${this.storeEpoch}:${this.mutationSeq}:${dataVersion}:${queryFingerprint}`
+      if (request.ifNoneMatch !== undefined && request.ifNoneMatch === revision) {
+        return { today, timeZone: 'Asia/Shanghai', revision, unchanged: true, snapshot: null }
+      }
+      const topics = this.db.prepare('SELECT id,name,created_at AS createdAt,updated_at AS updatedAt FROM checkin_topics ORDER BY created_at,id').all() as unknown as Topic[]
+      if (request.topicId !== undefined && !topics.some(topic => topic.id === request.topicId)) {
+        throw failure('checkin/topic-not-found')
+      }
+      const completions = (request.topicId === undefined
+        ? this.db.prepare('SELECT topic_id AS topicId,date FROM checkin_records WHERE date<=? ORDER BY topic_id,date').all(today)
+        : this.db.prepare('SELECT topic_id AS topicId,date FROM checkin_records WHERE topic_id=? AND date<=? ORDER BY date').all(request.topicId, today)) as unknown as Completion[]
+      const snapshot = computeCheckinStats({
+        today,
+        topics,
+        completions,
+        preset,
+        ...(resolvedMonth !== undefined ? { month: resolvedMonth } : {}),
+        ...(request.topicId !== undefined ? { topicId: request.topicId } : {}),
+      })
+      return { today, timeZone: 'Asia/Shanghai', revision, unchanged: false, snapshot }
+    })
+  }
   /** @returns Deterministic full backup and timestamped filename. */
   exportData(): ExportDataResult {
-    const backup = this.transaction((): CheckinBackup => ({
+    const backup = this.readTransaction((): CheckinBackup => ({
       format: 'dsh-checkin',
       version: 2,
       exportedAt: this.now().toISOString(),

@@ -1,4 +1,4 @@
-import type { CheckinResult, DeleteResult, ExportDataResult, ImportDataResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicId, TopicList } from '../types.ts';
+import type { CheckinResult, DeleteResult, ExportDataResult, ImportDataResult, QueryCheckins, QueryResult, SetCheckin, StatsRequest, StatsResult, Topic, TopicId, TopicList } from '../types.ts';
 /** Current SQLite schema; newer databases are refused without modification. */
 export declare const SCHEMA_VERSION = 2;
 /** Deployment choices resolved before opening a database. */
@@ -25,9 +25,12 @@ export declare function monthRange(month: string): {
 export declare class CheckinStore {
     private readonly now;
     private readonly db;
+    private readonly storeEpoch;
+    private mutationSeq;
     /** @param config - Absolute path and lock timeout. @param now - Clock used by date-sensitive operations. */
     constructor(config: StoreConfig, now?: () => Date);
     private transaction;
+    private readTransaction;
     private topic;
     /** Release the connection when the owning plugin unloads. */
     close(): void;
@@ -43,6 +46,8 @@ export declare class CheckinStore {
     set(request: SetCheckin): CheckinResult;
     /** @param request - Inclusive date range. @returns Current topics and sparse completed days. */
     query(request: QueryCheckins): QueryResult;
+    /** @param request - Window preset, optional month/topic filter, and revision watermark. @returns Computed stats or O(1) unchanged hit. */
+    stats(request: StatsRequest): Omit<StatsResult, 'refreshIntervalMs'>;
     /** @returns Deterministic full backup and timestamped filename. */
     exportData(): ExportDataResult;
     /** Atomically add unseen topic IDs while preserving all existing local topics. */

@@ -24,7 +24,7 @@ try {
   const tools = new Map()
   const disposers = []
   apply({ checkin: ctx.checkin, effect: setup => { disposers.push(setup()) }, tools: { register: tool => { tools.set(tool.name, tool); return () => tools.delete(tool.name) } } })
-  assert.equal(tools.size, 6)
+  assert.equal(tools.size, 7)
   const signal = new AbortController().signal
   const exec = { signal, callId: 'packed-smoke', rootCallId: 'packed-smoke', token: {}, name: 'packed-smoke', arguments: {}, concludeTurn() {}, deferContext() {} }
   const call = (name, args) => tools.get(name).execute(args, exec)
@@ -32,10 +32,16 @@ try {
   await call('checkin_topic_update', { id: topic.id, name: '临时主题已改名' })
   await call('checkin_set', { topicId: topic.id, date: '2024-02-29', completed: true })
   assert.equal((await call('checkin_query', { from: '2024-02-01', to: '2024-02-29' })).completions.length, 1)
+  const statsTool = await call('checkin_stats', { preset: 'month', month: '2024-02' })
+  assert.equal(statsTool.summary.completedCheckins, 1)
+  const statsFirst = await ctx.checkin.stats({ preset: 'month', month: '2024-02' }, signal)
+  assert.equal(statsFirst.unchanged, false)
+  const statsHit = await ctx.checkin.stats({ preset: 'month', month: '2024-02', ifNoneMatch: statsFirst.revision }, signal)
+  assert.equal(statsHit.unchanged, true)
   const backup = await ctx.checkin.exportData({}, signal)
   assert.equal(JSON.parse(backup.json).version, 2)
   assert.deepEqual(await ctx.checkin.importData({ json: backup.json }, signal), { importedTopics: 0, importedCompletions: 0, skippedTopics: 1 })
-  assert.equal(remote.descriptors.length, 9)
+  assert.equal(remote.descriptors.length, 10)
   for (const method of Object.values(remote.methods)) {
     method.input().create()
     method.input({ strict: true }).create()
@@ -56,7 +62,7 @@ try {
   assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok')
   assert.equal(db.prepare('PRAGMA user_version').get().user_version, 2)
   db.close()
-  console.log(JSON.stringify({ node: process.version, packedHost: 'passed', tools: 6, remoteMethods: 9, sqlite: 'ok', schema: 2, persistence: 'passed', backupRoundTrip: 'passed' }))
+  console.log(JSON.stringify({ node: process.version, packedHost: 'passed', tools: 7, remoteMethods: 10, sqlite: 'ok', schema: 2, persistence: 'passed', backupRoundTrip: 'passed' }))
 } finally {
   if (!disposed) await ctx.fiber.dispose()
   rmSync(dir, { recursive: true, force: true })

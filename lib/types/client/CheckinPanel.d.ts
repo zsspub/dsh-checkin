@@ -15,7 +15,7 @@ type TriggerProps = PropsRuntime<'sidebar.footer.action'> & Localized & TriggerI
  * @param props - Localized shell props and right-panel opener. @returns Sidebar trigger.
  */
 export declare function CheckinTrigger({ wide, t, openPanel }: TriggerProps): import("react").JSX.Element;
-/** Calendar, topic management and daily completion controls.
+/** Calendar, statistics, topic management and daily completion controls.
  * @param props - Localized tab props and per-occurrence controller factory. @returns Right-tab body.
  */
 export declare function CheckinPanel({ t, createController, useTabInfo }: PanelProps): import("react").JSX.Element;
