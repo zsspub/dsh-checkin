@@ -4,7 +4,7 @@ import type {
   TypertRemoteInfo,
   TypertRemoteMethod,
 } from '@deepseek-ai/dsh-typert-protocol'
-import type { CheckinResult, CreateTopic, DeleteResult, ExportDataRequest, ExportDataResult, ImportDataRequest, ImportDataResult, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicList, TopicRequest, UpdateTopic } from 'dsh-checkin/types'
+import type { CheckinResult, CreateTopic, DeleteResult, ExportDataRequest, ExportDataResult, ImportDataRequest, ImportDataResult, MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, StatsRequest, StatsResult, Topic, TopicList, TopicRequest, UpdateTopic } from 'dsh-checkin/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$636865636b696e {
@@ -16,6 +16,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     month: (request: MonthRequest, signal?: AbortSignal) => Promise<RemoteResult<MonthResult>>
     query: (request: QueryCheckins, signal?: AbortSignal) => Promise<RemoteResult<QueryResult>>
     set: (request: SetCheckin, signal?: AbortSignal) => Promise<RemoteResult<CheckinResult>>
+    stats: (request: StatsRequest, signal?: AbortSignal) => Promise<RemoteResult<StatsResult>>
     update: (request: UpdateTopic, signal?: AbortSignal) => Promise<RemoteResult<Topic>>
   }
   interface TypertRemoteMap {
@@ -27,6 +28,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'checkin/month': (request: MonthRequest, signal?: AbortSignal) => Promise<RemoteResult<MonthResult>>
     'checkin/query': (request: QueryCheckins, signal?: AbortSignal) => Promise<RemoteResult<QueryResult>>
     'checkin/set': (request: SetCheckin, signal?: AbortSignal) => Promise<RemoteResult<CheckinResult>>
+    'checkin/stats': (request: StatsRequest, signal?: AbortSignal) => Promise<RemoteResult<StatsResult>>
     'checkin/update': (request: UpdateTopic, signal?: AbortSignal) => Promise<RemoteResult<Topic>>
   }
   interface TypertRemoteNamespaceMap {
@@ -43,6 +45,7 @@ export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'checkin/month': TypertRemoteMethod<{ readonly 'request': MonthRequest }, MonthResult>
   readonly 'checkin/query': TypertRemoteMethod<{ readonly 'request': QueryCheckins }, QueryResult>
   readonly 'checkin/set': TypertRemoteMethod<{ readonly 'request': SetCheckin }, CheckinResult>
+  readonly 'checkin/stats': TypertRemoteMethod<{ readonly 'request': StatsRequest }, StatsResult>
   readonly 'checkin/update': TypertRemoteMethod<{ readonly 'request': UpdateTopic }, Topic>
 }>
 export default TYPERT_REMOTE

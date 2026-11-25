@@ -32,6 +32,7 @@ function mount() {
   let data: MonthResult = { today: '2026-09-10', timeZone: 'Asia/Shanghai', from: '2026-09-01', to: '2026-09-30', month: '2026-09', refreshIntervalMs: 3000, topics: [{ id: 'read' as TopicId, name: '阅读', createdAt: '2026-09-10', updatedAt: '2026-09-10' }, { id: 'run' as TopicId, name: '运动', createdAt: '2026-09-10', updatedAt: '2026-09-10' }], completions: [] }
   const api: CheckinApi = {
     month: vi.fn(async () => data),
+    stats: vi.fn(),
     create: vi.fn(async () => { throw new Error('checkin/duplicate-name') }),
     update: vi.fn(async () => ({})), delete: vi.fn(async () => ({})),
     set: vi.fn(async request => { data = { ...data, completions: request.completed ? [...data.completions, { topicId: request.topicId, date: request.date! }] : data.completions.filter(row => row.topicId !== request.topicId || row.date !== request.date) }; return {} }),
@@ -101,7 +102,7 @@ it('restores focus to month navigation after loading', async () => {
 it('loads only while its host tab is visible', async () => {
   const api: CheckinApi = {
     month: vi.fn(async () => ({ today: '2026-09-10', timeZone: 'Asia/Shanghai', from: '2026-09-01', to: '2026-09-30', month: '2026-09', refreshIntervalMs: 3000, topics: [], completions: [] })),
-    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(), stats: vi.fn(),
   }
   const controller = new CheckinController(api)
   let visible = false
@@ -120,7 +121,7 @@ it('cancels an in-flight read when the host tab is hidden', async () => {
   let requestSignal: AbortSignal | undefined
   const api: CheckinApi = {
     month: vi.fn((_request, signal) => { requestSignal = signal; return new Promise<MonthResult>(() => {}) }),
-    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(), stats: vi.fn(),
   }
   const controller = new CheckinController(api)
   let visible = true
@@ -138,7 +139,7 @@ it('cancels an in-flight read when the host ends the tab lifetime', async () => 
   let requestSignal: AbortSignal | undefined
   const api: CheckinApi = {
     month: vi.fn((_request, signal) => { requestSignal = signal; return new Promise<MonthResult>(() => {}) }),
-    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(), stats: vi.fn(),
   }
   const controller = new CheckinController(api)
   const lifetime = new AbortController()
@@ -154,7 +155,7 @@ it('keeps split-pane tab state and requests independent', async () => {
       const value = request.month ?? '2026-09'
       return { today: '2026-09-10', timeZone: 'Asia/Shanghai', from: `${value}-01`, to: `${value}-${value === '2026-09' ? '30' : '31'}`, month: value, refreshIntervalMs: 3000, topics: [{ id: 'read' as TopicId, name: '阅读', createdAt: '2026-09-10', updatedAt: '2026-09-10' }], completions: [] }
     }),
-    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(),
+    create: vi.fn(), update: vi.fn(), delete: vi.fn(), set: vi.fn(), exportData: vi.fn(), importData: vi.fn(), stats: vi.fn(),
   }))
   const first = new AbortController().signal
   const second = new AbortController().signal

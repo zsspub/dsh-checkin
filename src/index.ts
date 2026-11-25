@@ -5,7 +5,8 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { CheckinStore, monthRange } from './host/store.ts'
 import type {
   CheckinResult, CreateTopic, DeleteResult, ExportDataRequest, ExportDataResult, ImportDataRequest, ImportDataResult,
-  MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, Topic, TopicList, TopicRequest, UpdateTopic,
+  MonthRequest, MonthResult, QueryCheckins, QueryResult, SetCheckin, StatsRequest, StatsResult, Topic, TopicList,
+  TopicRequest, UpdateTopic,
 } from './types.ts'
 export type * from './types.ts'
 /** Deployment-owned storage and refresh settings. */
@@ -49,6 +50,12 @@ export class CheckinService extends TypertRemoteService {
     signal.throwIfAborted()
     const month = request.month ?? this.store.list().today.slice(0, 7)
     return { ...this.store.query(monthRange(month)), month, refreshIntervalMs: this.config.refreshIntervalMs }
+  }
+  /** @param request - Statistics window, optional topic filter, and conditional revision watermark. @param signal - Cancellation. @returns Aggregated check-in statistics or O(1) unchanged hit. */
+  @Remote
+  async stats(request: StatsRequest, signal: AbortSignal): Promise<StatsResult> {
+    signal.throwIfAborted()
+    return { ...this.store.stats(request), refreshIntervalMs: this.config.refreshIntervalMs }
   }
   /** @param _request - Empty request. @param signal - Cancellation. @returns Portable JSON backup. */
   @Remote

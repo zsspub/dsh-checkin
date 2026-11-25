@@ -153,4 +153,67 @@ describe('daily check-ins', () => {
     expect(validDate('9999-12-31')).toBe('9999-12-31')
     expect(() => monthRange('2026-2')).toThrow('invalid-date')
   })
+  it('computes stats with O(1) ifNoneMatch invalidation across writes, WAL connections, restarts, and date rollover', () => {
+    const read = store.create('阅读')
+    const run = store.create('运动')
+    store.set({ topicId: read.id, date: '2026-09-09', completed: true })
+    store.set({ topicId: read.id, date: '2026-09-10', completed: true })
+    store.set({ topicId: run.id, date: '2026-09-09', completed: true })
+
+    const first = store.stats({ preset: '7d' })
+    expect(first.unchanged).toBe(false)
+    expect(first.today).toBe('2026-09-10')
+    expect(first.snapshot?.summary.completedCheckins).toBe(3)
+    expect(first.snapshot?.summary.todayDoneCount).toBe(1)
+
+    // Conditional hit returns O(1) unchanged response
+    const hit = store.stats({ preset: '7d', ifNoneMatch: first.revision })
+    expect(hit).toEqual({
+      today: '2026-09-10',
+      timeZone: 'Asia/Shanghai',
+      revision: first.revision,
+      unchanged: true,
+      snapshot: null,
+    })
+
+    // Local mutation invalidates watermark via mutationSeq
+    store.set({ topicId: run.id, date: '2026-09-10', completed: true })
+    const afterLocalWrite = store.stats({ preset: '7d', ifNoneMatch: first.revision })
+    expect(afterLocalWrite.unchanged).toBe(false)
+    expect(afterLocalWrite.snapshot?.summary.todayDoneCount).toBe(2)
+
+    // Cross-connection WAL write invalidates watermark via PRAGMA data_version
+    const other = new CheckinStore({ databasePath: path, busyTimeoutMs: 1000 }, () => new Date('2026-09-09T16:01:00Z'))
+    try {
+      other.set({ topicId: run.id, date: '2026-09-08', completed: true })
+      const afterExternalWrite = store.stats({ preset: '7d', ifNoneMatch: afterLocalWrite.revision })
+      expect(afterExternalWrite.unchanged).toBe(false)
+      expect(afterExternalWrite.snapshot?.summary.completedCheckins).toBe(5)
+
+      // Separate instance (simulating Host restart) has distinct storeEpoch so old revision misses
+      const afterRestart = other.stats({ preset: '7d', ifNoneMatch: afterExternalWrite.revision })
+      expect(afterRestart.unchanged).toBe(false)
+    } finally {
+      other.close()
+    }
+
+    // Beijing midnight rollover invalidates watermark
+    let instant = new Date('2026-09-10T15:59:59Z')
+    const rolling = new CheckinStore({ databasePath: path, busyTimeoutMs: 1000 }, () => instant)
+    try {
+      const beforeMidnight = rolling.stats({ preset: '7d' })
+      expect(beforeMidnight.today).toBe('2026-09-10')
+      instant = new Date('2026-09-10T16:00:00Z')
+      const afterMidnight = rolling.stats({ preset: '7d', ifNoneMatch: beforeMidnight.revision })
+      expect(afterMidnight.unchanged).toBe(false)
+      expect(afterMidnight.today).toBe('2026-09-11')
+    } finally {
+      rolling.close()
+    }
+
+    // Input validation
+    expect(() => store.stats({ preset: '365d' as never })).toThrow('invalid-range')
+    expect(() => store.stats({ preset: 'month', month: '2026-13' })).toThrow('invalid-date')
+    expect(() => store.stats({ preset: '30d', topicId: 'missing' as TopicId })).toThrow('topic-not-found')
+  })
 })

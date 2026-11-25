@@ -4,7 +4,7 @@ import remote from '../lib/typert.remote-client.js'
 it('loads every generated Remote and materializes ordinary and strict input codecs', () => {
   expect(remote.package).toBe('dsh-checkin')
   expect(remote.descriptors.map(descriptor => descriptor.method).sort()).toEqual([
-    'create', 'delete', 'exportData', 'importData', 'list', 'month', 'query', 'set', 'update',
+    'create', 'delete', 'exportData', 'importData', 'list', 'month', 'query', 'set', 'stats', 'update',
   ])
   for (const method of Object.values(remote.methods)) {
     expect(method.cancellation).toEqual({ parameter: 'signal' })
@@ -26,4 +26,8 @@ it('keeps generated request validation and the versioned backup Remote contract'
   expect(() => remote.methods['checkin/set'].input().create().parse({ request: { topicId: 'topic', completed: 'yes' } })).toThrow()
   expect(remote.methods['checkin/exportData'].input().create().parse({ _request: {} })).toEqual({ _request: {} })
   expect(remote.methods['checkin/importData'].input().create().parse({ request: { json: '{}' } })).toEqual({ request: { json: '{}' } })
+  const stats = remote.methods['checkin/stats']
+  expect(stats.input().create().parse({ request: { preset: '30d' } })).toEqual({ request: { preset: '30d' } })
+  expect(() => stats.input({ strict: true }).create().parse({ request: { preset: '30d', unexpected: true } })).toThrow()
+  expect(() => stats.input().create().parse({ request: { preset: '365d' } })).toThrow()
 })

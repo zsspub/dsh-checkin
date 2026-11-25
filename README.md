@@ -20,7 +20,7 @@ For the macOS Desktop profile, use the application-bundled CLI after fully quitt
 
 Ask DSH to create a Reading topic, complete it today, backfill yesterday, query a month, rename the topic, undo a day, or delete a topic and its history. Tools discover exact topic IDs before updating them. Topic deletion is permanent; undoing a check-in removes only that day's completion.
 
-Open **Check-ins** at the bottom of the sidebar to open or focus the Host's right-side check-in tab. The month overview shows completed/current topics per day. Select a topic to see its calendar, or select a day to edit completions in the list below. Topic rows offer rename and confirmed deletion. The **Data** menu exports a versioned full JSON backup or opens an import preview dialog. Confirmed imports atomically add unseen topic IDs with all their completion records; existing IDs and local changes are skipped. Arrow keys move calendar focus; Home/End select the month's first/last day. The Host provides tab closing, splitting, floating and fullscreen controls.
+Open **Check-ins** at the bottom of the sidebar to open or focus the Host's right-side check-in tab. Switch between **Calendar** and **Statistics** tabs in the panel header. In Calendar view, the month overview shows completed/current topics per day; select a topic to see its calendar, or select a day to edit completions in the list below. Topic rows offer rename and confirmed deletion. In Statistics view, review today's progress, completion rates, streaks, per-topic breakdowns, and consistency heatmaps across 7d/30d/90d/monthly/all-time windows; select a topic to inspect its completion trend and weekday rhythm, or click any heatmap day/month to jump straight to Calendar view. The **Data** menu exports a versioned full JSON backup or opens an import preview dialog. Confirmed imports atomically add unseen topic IDs with all their completion records; existing IDs and local changes are skipped. Arrow keys move calendar focus; Home/End select the month's first/last day. The Host provides tab closing, splitting, floating and fullscreen controls.
 
 All dates use **Asia/Shanghai**. Every past date is editable, including dates before topic creation. Future dates are read-only. Historical totals use the current topic catalog, so adding or deleting topics changes their denominator. The visible tab refreshes every three seconds and immediately after UI writes, becoming visible again, or returning to the page. Failed writes retain form input.
 
@@ -50,8 +50,9 @@ The path must be absolute; busy timeout must be at least 1 ms and refresh interv
 | `checkin_topic_delete` | Delete the topic and all its completions. |
 | `checkin_set` | Set an explicit boolean status; omitted date means today. |
 | `checkin_query` | Read inclusive dates, optionally filtered by topic ID. |
+| `checkin_stats` | Compute aggregated check-in statistics (completion rate, streaks, topic breakdown, optional heatmap/trend/weekday series). |
 
-The typed `checkin` Remote namespace exposes `list/create/update/delete/set/query/month/exportData/importData`. `query` returns current topics and sparse completed pairs: absent pairs are incomplete. `month` also returns the refresh interval. Import/export are intentionally UI-only because file selection and confirmation belong to the panel. UI and tools call the same Host service. Ordinary DSH tool calls/results preserve model-visible results in the Session log.
+The typed `checkin` Remote namespace exposes `list/create/update/delete/set/query/month/stats/exportData/importData`. `query` returns current topics and sparse completed pairs: absent pairs are incomplete. `month` also returns the refresh interval. `stats` aggregates summary KPIs, per-topic metrics, heatmaps, trends, and weekday rhythm with O(1) `ifNoneMatch` conditional polling. Import/export are intentionally UI-only because file selection and confirmation belong to the panel. UI and tools call the same Host service. Ordinary DSH tool calls/results preserve model-visible results in the Session log.
 
 ## Development
 
@@ -60,7 +61,7 @@ pnpm install
 pnpm run check
 ```
 
-Host and Client compile separately. The virtual analysis workspace in `scripts/generate-typert.mjs` generates the seven Remote declarations; `tsdown` bundles the browser module using the DSH loader format. `check` builds, typechecks, lints, runs focused database/tool/UI tests and checks tarball contents. The deterministic tool-output replay snapshot is keyless; it is distinct from a real model run.
+Host and Client compile separately. The virtual analysis workspace in `scripts/generate-typert.mjs` generates the ten Remote declarations; `tsdown` bundles the browser module using the DSH loader format. `check` builds, typechecks, lints, runs focused database/tool/UI tests and checks tarball contents. The deterministic tool-output replay snapshot is keyless; it is distinct from a real model run.
 
 See [verification evidence](docs/verification.md) for the actual tested environments and recording. No reminders, streak rewards, notes, numeric goals, archives or cloud sync are included.
 
